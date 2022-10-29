@@ -1,6 +1,5 @@
 # Pytorch 기반 모델 학습 코드
 # 코드에 대한 설명은 validation.py에 작성했습니다.
-
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler
 from transformers import BertForSequenceClassification, AdamW
 from transformers import get_linear_schedule_with_warmup
@@ -161,7 +160,7 @@ Pytorch 학습 함수
 '''
 def Training(model, device, train_dataloader):
     start_time = time.time()
-    print("## ----- 모델 검증 진행 ----- ##")
+    print("## ----- 모델 학습 진행 ----- ##")
     data_len = len(train_dataloader)
 
     # 랜덤시드. 매번 섞일 때 다른 값으로 안나오게 고장
@@ -232,7 +231,7 @@ def Training(model, device, train_dataloader):
         # 평균 로스 계산
         avg_train_loss = total_loss / len(train_dataloader)
         print(f'학습에 대한 평균 손실값 = {avg_train_loss}')
-    print('## ------ 최종 학습 완료 ------ ##')
+    print(f'## ------ 최종 학습 완료 (학습시간 = [{time.time() - start_time}])------ ##')
 
 
 #학습 모델 저장

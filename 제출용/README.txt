@@ -10,7 +10,7 @@
 Validation(박천복).py 코드를 사용합니다.
 
 Validation(박천복).py 코드 안에 주석으로 사용법 작성했습니다.
-PATH를 확인하면 '.\Dataset.csv'로 경로 명시했습니다.
+검증에 사용할 데이터셋은 PATH = '.\Dataset.csv'로 경로 명시했습니다.
 
 검증에 사용할 데이터셋은 csv 파일이고,
 그 파일명이 Dataset으로 되어있다고 가정했기 때문입니다.

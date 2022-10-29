@@ -246,7 +246,7 @@ def Checking_cuda():
 
 
 if __name__ == '__main__':
-    settime = time().time()
+    settime = time.time()
     # 검증에 사용할 데이터를 엑셀(csv)에서 가져온다고 가정
     kiumSet = pd.read_csv(PATH)
     df = pd.DataFrame(kiumSet)
