@@ -96,16 +96,15 @@ def Findings_Preprocessing(df : pd.DataFrame) :
 
         ## 4. 순서 번호, 구분 기호를 의미하는 특수 문자 제거.
         ## ex) '1.', '2.', '(1)', '(2)', ' - ', '->, -->', '→', '1)'  등
-        match = re.findall(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', Ftext)
+        match = re.findall(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:.,]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', Ftext)
         if match :
             #print(f"Start conv\n{Ftext}")
-            Ftext = re.sub(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', '', Ftext)
+            Ftext = re.sub(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:.,]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', '', Ftext)
             #print(f"End conv\n{Ftext}")
-            cnt += 1
 
 
         ## 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
-        print(f"Start conv\n{Ftext}")
+        #print(f"Start conv\n{Ftext}")
         Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
         print(f"End conv\n{Ftext}")
 
