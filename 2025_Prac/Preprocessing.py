@@ -34,7 +34,84 @@ def empty_to_missing(df : pd.DataFrame):
       print('-----------------------------------------------------------')
 
 
+# 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
+# 사람이 이해하기 쉽도록 구분할 목적의 순서 기호 ( 1., 2. 등)
+# 특수 문자 표현 (2개 이상의 줄넘김 또는 --> 등의 방향 표시 등)
+def Findings_Preprocessing(df : pd.DataFrame) :
+    cnt = 0
+    for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
+        row = df.iloc[i]
+        Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
+        Ftext = Ftext.replace('\r', '')
 
+        ## 1. Findings에 포함된 'Clinical information :' Keyword 제거
+        Ftext = re.sub(r'Clinical information\s*:', '', Ftext)
+
+        ## 2. 양성과 음성을 구분하는 문자를 명확한 단어로 변경한다.
+        ## (+) --> positive, (-) --> negative
+        if '(+)' in Ftext :
+            #print(Ftext)
+            Ftext = re.sub(r'\(\+\)|\w\s\+', 'positive', Ftext)
+            #print(Ftext)
+
+        if '(-)' in Ftext:
+            #print(Ftext)
+            Ftext = re.sub(r'\(\-\)', 'negative', Ftext)
+            #print(Ftext)
+
+        ## 3. 크기가 변경되는 데이터를 증가(increase) 또는 감소(decrease)로 변경한다.
+        ## ex) 18mm --> 24mm   = increase
+        ## ex) 18 mm --> 9 mm  = decrease
+        bef_matches = re.findall(r'(\d+(\.\d+)?)(?=\s*(m|c)m\.?\s*\-+>\s*\d+(\.\d+)?\s*(m|c)m)\.?', Ftext)   # 이전 크기 추출
+        # if bef_matches :
+        #     print(Ftext)
+        #     print(bef_matches)
+
+
+        af_matches = re.findall(r'(?:\-+>)\s*(\d+(\.\d+)?)(?=\s*(m|c)m\.?)', Ftext) # 이후 크기 추출
+        # if af_matches :
+        #     print(f"After Test\n{Ftext}")
+        #     print(af_matches)
+
+        size_matches = tuple()
+        for i in range(len(bef_matches)) :
+            bef = bef_matches[i][0]
+            af  = af_matches[i][0]
+            sent = ""
+            #print(f"text bef and af = {bef}, {af}")
+
+            # 크기 변경 정도에 따라 decrease, increase, NoChange 구분.
+            if float(bef) > float(af) :
+                sent = "decrease"
+            elif float(bef) < float(af) :
+                sent = "increase"
+            elif float(bef) == float(af) :
+                sent = "NoChange"
+
+            #print(Ftext)
+            # 전체 문자열을 'decrease|increase|NoChange' 중 하나로 변경.
+            Ftext = re.sub(str(bef)+r'(\.\d+)?\s*(m|c)m\.?\s*\-+>\s*'+str(af)+r'(\.\d+)?\s*(m|c)m\.?', sent, Ftext)
+            #print(Ftext)
+
+
+        ## 4. 순서 번호, 구분 기호를 의미하는 특수 문자 제거.
+        ## ex) '1.', '2.', '(1)', '(2)', ' - ', '->, -->', '→', '1)'  등
+        match = re.findall(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', Ftext)
+        if match :
+            #print(f"Start conv\n{Ftext}")
+            Ftext = re.sub(r'\d\.(?!\d)|\(\d\)|\s\-\s|\-+>|→|\d\)\s|(?<=\w|[가-힣])\s*[)>:]|[(<](?=\w|[가-힣]|\<)|\s*\-[->]', '', Ftext)
+            #print(f"End conv\n{Ftext}")
+            cnt += 1
+
+
+        ## 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
+        print(f"Start conv\n{Ftext}")
+        Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
+        print(f"End conv\n{Ftext}")
+
+
+        if cnt == 100 :
+            break
 
 
 if __name__ == '__main__':
@@ -59,3 +136,7 @@ if __name__ == '__main__':
 
     # 2. Missing Value Handling
     empty_to_missing(df)
+
+
+    # 3. 'Findings' Sentence Preprocessing
+    Findings_Preprocessing(df)
