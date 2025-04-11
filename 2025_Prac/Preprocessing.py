@@ -163,7 +163,6 @@ def Findings_Preprocessing(df : pd.DataFrame) :
     return raw_find, after_find
 
 
-
 # Conclusion 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
 def Conclusion_Preprocessing(df : pd.DataFrame) :
     cnt = 0         # Test print count
@@ -176,6 +175,78 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         Ctext = Ctext.replace('\r', '')
         raw_data = Ctext
 
+        ##  x. 소견에 포함된 모든 수치(크기) 데이터를 하나의 공통 형식으로 정형화 작업.
+        #   규칙1 : mm 단위로 통일. 수치와 단위를 띄어쓰지 않고 붙여서 표현. 수치와 단위 사이에 표함된 모든 특수 문자는 변환 또는 제거.
+        #   규칙2 : 1차원 이상으로 표현된 수치(크기) 데이터는 'x', '*' 등의 특수문자로 표현되었는데, 이를 'Length', 'Width', 'Height'로 변환.
+        #           ex) 1.2mm = Length 1.2mm
+        #           ex) 1.2x2.5mm = Length 1.2mm Width 2.5mm
+        #           ex) 1.2x2.5x1.8mm = Length 1.2mm Width 2.5mm Height 1.8mm
+
+        # 3차원 크기 데이터 정형화
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(cm|mm)', Ctext)
+        if matches :
+            for grplist in matches :                            # 매칭된 그룹 리스트 순환. 6개의 원소가 하나의 그릅에 포함.
+                if grplist[-1] == 'cm':                         # cm 단위라면 mm 단위로 변환 (cm 단위는 소수점이 포함되지만, mm 단위는 정수만으로 표현 가능).
+                    Ltmp = str(int(float(grplist[0]) * 10))     # 정형화 값으로 사용할 mm단위의 L,W,H 값.
+                    Wtmp = str(int(float(grplist[2]) * 10))
+                    Htmp = str(int(float(grplist[4]) * 10))
+                    Lvalue = re.sub('\.', '\.', grplist[0])     # Length Value : 특수문자 '.'를 정규표현식에서 일반 문자로 보이도록 변경.
+                    Wvalue = re.sub('\.', '\.', grplist[2])     # Width Value.
+                    Hvalue = re.sub('\.', '\.', grplist[4])     # Height Value.
+
+                    # Length 정형화
+                    Ctext = re.sub(
+                        fr'{Lvalue}' + r'(?=\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*cm)',
+                        fr'Length {Ltmp}mm '
+                        , Ctext)
+                    # Width 정형화
+                    Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*(cm)?(?=(x|\*|X)\.?\s*{Hvalue})',
+                                   fr'Width {Wtmp}mm '
+                                   , Ctext)
+                    # Height 정형화
+                    Ctext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm ).+{Hvalue}\s*cm',
+                                   fr'Height {Htmp}mm '
+                                   , Ctext)
+                else :
+                    Ctext = re.sub(fr'{grplist[0]}'+r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*mm)', fr'Length {grplist[0]}mm ', Ctext)
+                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*(mm)?(?=(x|\*|X)\.?\s*{grplist[4]})', fr'Width {grplist[2]}mm ', Ctext)
+                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm Width {grplist[2]}mm ).+{grplist[4]}\s*mm', fr'Height {grplist[4]}mm ', Ctext)
+                # print(matches)
+                # print(Ctext)
+
+        # 2차원 크기 데이터 정형화
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(cm|mm)', Ctext)
+        if matches :
+            for grplist in matches :
+                if grplist[-1] == 'cm' :
+                    Ltmp = str(int(float(grplist[0]) * 10))
+                    Wtmp = str(int(float(grplist[2]) * 10))
+                    Lvalue = re.sub('\.', '\.', grplist[0])
+                    Wvalue = re.sub('\.', '\.', grplist[2])
+                    # Length 정형화
+                    Ctext = re.sub(
+                        fr'[^1-9]{Lvalue}' + r'(?=\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*cm)',
+                        fr'Length {Ltmp}mm '
+                        , Ctext)
+                    # Width 정형화
+                    Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*cm',
+                                   fr'Width {Wtmp}mm '
+                                   , Ctext)
+                else :
+                    # Length 정형화
+                    Ctext = re.sub(
+                        fr'[^1-9]{grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*mm)',
+                        fr'Length {grplist[0]}mm '
+                        , Ctext)
+                    # Width 정형화
+                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*mm',
+                                   fr'Width {grplist[2]}mm '
+                                   , Ctext)
+            print(matches)
+            print(Ctext)
+
+
+
         ##  x. 괄호 안의 텍스트 중 크기 관련(숫자 + mm/cm), 영상 인덱스 관련(IDX, Img), 날짜 관련(2021.01.19) 데이터는 전부 삭제
         #   괄호 안에 내용은 작성된 소견에서 '보충'하는 의미로 수치나 참고 번호를 나타낸다.
         #   하지만, 그런 데이터가 판독 분류를 어렵게 만들 수 있으므로 괄호에 포함된 수치/날짜/영상번호 등의 내용은 전부 삭제한다.
@@ -183,7 +254,8 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         Ctext = re.sub(r'\((\d|Rt|Lt|\s).*?(cm|mm)\)\.?|'
                        r'(\(|\[).*?(IDX|Img|IM|Idx).*(\)|\])|'
                        r'\(20\d{2}(\.|\-).*\)\.?|'
-                       r'DDx\.\)?', ' ', Ctext)
+                       r'DDx\.\)?|'
+                       r'rec\)', ' ', Ctext)
 
         Ctext = re.sub(r'P\-Com\.?\s*a((\.|\))\)?|rtery)', 'posterior communicating artery', Ctext)
         Ctext = re.sub(r'P\-Com', 'posterior communicating', Ctext)
@@ -216,23 +288,36 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
 
         ##  3. 불필요한 특수 문자 조합 제거.
         matches = re.findall(r'\;|\:|\s{2,3}\-\-?\>?|\[|\]|'
-                             r'(?<=[a-zA-Z가-힣1-9 ])\s*(\(|\))\s*(\.|\,|\)){0,2}(?=[a-zA-Z가-힣1-9<> ]|$)', Ctext)
+                             r'(?<=[a-zA-Z가-힣1-9 ])\s*(\(|\))\s*(\.|\,|\)){0,2}(?=[a-zA-Z가-힣1-9<> ]|$)|'
+                             r'(\-|\=){1,4}>|\s(\-|\=){2,4}(\s|\w)|'
+                             r'\(\=|'
+                             r'\s(\*|\=)\s|'
+                             r'\*{2,3}|^\*', Ctext)
 
         if matches :
             Ctext = re.sub(r'\;|\:|\s{2,3}\-\-?\>?|\[|\]|'
-                           r'(?<=[a-zA-Z가-힣1-9 ])\s*(\(|\))\s*(\.|\,|\)){0,2}(?=[a-zA-Z가-힣1-9<> ]|$)', ' ', Ctext)
+                           r'(?<=[a-zA-Z가-힣1-9 ])\s*(\(|\))\s*(\.|\,|\)){0,2}(?=[a-zA-Z가-힣1-9<> ]|$)|'
+                           r'(\-|\=){1,4}>|\s(\-|\=){2,4}(\s|\w)|'
+                           r'\(\=|'
+                           r'\s(\*|\=)\s|'
+                           r'\*{2,3}|^\*'
+                           , ' ', Ctext)
 
-        matches = re.findall(r'P\-Com|posterior communicating', Ctext)
-        if matches:
-            print(f"Need to Replace\n{Ctext}")
+
+
+        # matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(cm|mm)', Ctext)
+        # if matches:
+        #     print(f"Need to Replace\n{Ctext}")
+        #     cnt += 1
+        #     if cnt == 30 : break
 
 # 테스트 목적의 csv 파일 반환.
-# raw_find : Findings 데이터 원본.
-# after_find : Findings 데이터 Preprocessing 결과.
-def Get_DataFrame_to_CSV(raw_df, af_df):
+# Raw_Text : 텍스트 데이터 원본.
+# After_Text : Preprocessing 결과 텍스트.
+def Get_DataFrame_to_CSV(raw_txt, af_txt):
     df = pd.DataFrame({
-        'raw_find': raw_df,
-        'after_find': af_df
+        'Raw_Text': raw_txt,
+        'After_Text': af_txt
     })
 
     df.to_csv('output.csv', index=False, encoding='utf-8-sig')  # 윈도우에서 한글 포함 시 utf-8-sig 권장
