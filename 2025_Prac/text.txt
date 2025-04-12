@@ -1,124 +1,25 @@
-def Findings_Preprocessing(df : pd.DataFrame) :
-    cnt = 0             # Test print count
-    raw_find = []       # Findings Raw Data List
-    after_find = []     # Findings Preprocessing List
-    for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
-        row = df.iloc[i]
-        Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
-        Ftext = Ftext.replace('\r', '')
-        raw_data = Ftext
+import re
 
-        ##  1. Findings에 포함된 'Clinical information(CI)' Keyword 제거
-        #   분류 기준이 아닌 소견 내용 구분 목적의 텍스트이므로 삭제.
-        Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|CI\,', '', Ftext)
+text = "Increased size of homogeneous enhancing mass at left basal ganglia Length 23mm Width 28mm and another 6.5 mm region."
 
-        ## 2. 양성과 음성을 구분하는 문자를 명확한 단어로 변경한다.
-        ## (+) --> positive, (-) --> negative
-        if '(+)' in Ftext :
-            Ftext = re.sub(r'\(\+\)|\w\s\+', 'positive', Ftext)
+# Step 1: Length/Width/Height 패턴을 마스킹하며 보존 (토큰 형태로)
+pattern_protect = re.compile(r'\b(Length|Width|Height)\s+(\d+(?:\.\d+)?)\s*mm\b')
 
-        if '(-)' in Ftext:
-            Ftext = re.sub(r'\(\-\)', 'negative', Ftext)
+# 마스킹하면서 저장
+protected_matches = []
+def protect_repl(match):
+    token = f"__PROTECT{len(protected_matches)}__"
+    protected_matches.append((token, match.group(0)))  # 원문 저장
+    return token
 
-        ##  3. 크기가 변경되는 데이터를 증가(increase) 또는 감소(decrease)로 변경한다.
-        #   하나의 의미로 통합하기 위해 특수 문자를 포함한 크기 값의 텍스트를 변경함.
-        #   ex) 18mm --> 24mm   = increase
-        #   ex) 18 mm --> 9 mm  = decrease
-        #   '-->'를 기준으로 이전 값과 이후 값을 추출하여 비교한다.
-        bef_matches = re.findall(r'(\d+(\.\d+)?)(?=\s*(m|c)m\.?\s*\-+>\s*\d+(\.\d+)?\s*(m|c)m)\.?', Ftext)   # 이전 크기 추출
-        # if bef_matches :
-        #     print(Ftext)
-        #     print(bef_matches)
+masked = pattern_protect.sub(protect_repl, text)
 
-        af_matches = re.findall(r'(?:\-+>)\s*(\d+(\.\d+)?)(?=\s*(m|c)m\.?)', Ftext) # 이후 크기 추출
-        # if af_matches :
-        #     print(f"After Test\n{Ftext}")
-        #     print(af_matches)
+# Step 2: 이제 나머지 "단독 mm 수치"만 추출
+unlabeled_matches = re.findall(r'\b\d+(?:\.\d+)?\s*mm\b', masked)
 
-        size_matches = tuple()
-        for i in range(len(bef_matches)) :
-            bef = bef_matches[i][0]
-            af  = af_matches[i][0]
-            sent = ""
-            #print(f"text bef and af = {bef}, {af}")
+# Step 3: 복원
+for token, original in protected_matches:
+    masked = masked.replace(token, original)
 
-            # 크기 변경 정도에 따라 decrease, increase, NoChange 구분.
-            if float(bef) > float(af) :
-                sent = "decrease"
-            elif float(bef) < float(af) :
-                sent = "increase"
-            elif float(bef) == float(af) :
-                sent = "NoChange"
-
-            #print(Ftext)
-            # 전체 문자열을 'decrease|increase|NoChange' 중 하나로 변경.
-            Ftext = re.sub(str(bef)+r'(\.\d+)?\s*(m|c)m\.?\s*\-+>\s*'+str(af)+r'(\.\d+)?\s*(m|c)m\.?', sent, Ftext)
-            #print(Ftext)
-
-        ##  4. 날짜 기록 데이터 (2011.07.08.), (2011. 11. 11.), (2004) 전체 삭제.
-        #   날짜 데이터는 '이전'의 의미를 전달할 뿐, 크게 의미 있지 않다고 판단하여 텍스트 삭제 진행.
-        Ftext = re.sub(r'\(?\d{4}\.\d{1,2}\.\d{1,2}\.?\)?|'
-                       r'\(\d{4}\)|'
-                       r'\(?\d{4}\.\s\d{1,2}\.\s\d{1,2}\.\)', '', Ftext)
-
-        ##  5. 특정 기호나 특수 문자 전체 삭제.
-        #   소견 내용을 읽기 쉽게 구분하는 문자( --, -, *, [ 등)는 결과 분류에 필요한 데이터가 아니므로 삭제(띄어쓰기로 텍스트 변환).
-        Ftext = re.sub(r'\-\-|\?\)?|\!|\:|\(?\*\)?|\s\-\s|\[', ' ', Ftext)
-
-
-        ##  6. 순서 번호, 구분 기호를 의미하는 특수 문자 제거.
-        #   ex) '1.', '2.', '(1)', '(2)', ' - ', '->, -->', '→', '1)', '[1]', ';' 등
-        #   특정 기호들의 조합, 숫자/문자를 결합한 표현은 명확하게 구분하여 제거할 수 있도록 정규표현식 작성에 주의.
-        #print(f"Before Text\n{Ftext}")
-        Ftext = re.sub(r'([^\W\d_])>|'
-                    r'(?<=MRV)\s*>|'
-                    r'\s*\-+>|'
-                    r'\s*\=+>|'
-                    r'\*>|'
-                    r'<[a-zA-Z가-힣]|'
-                    r'<\-{1,2}|'
-                    r';|'
-                    r'\d\.(?!\d)\)?|'
-                    r'\(\d\)(\:|\.|\,)?|'
-                    r'\[\d\]|'
-                    r'(\s)\(\*\,|'
-                    r'(\s)\.\s|'
-                    r'(?<=\w)\.\)?\,|'
-                    r'(?<=\w|\))(\]|\))[,.]|'
-                    r'(?<=\w)\s{0,1}\,\.?|'
-                    r'(?<=[가-힣a-zA-Z])\s?\.{1,2}\)?|'
-                    r'\((?=\s{0,1}\w|\<|\>|\#|\=)|'
-                    r'(?<=\w|\%)\)|'
-                    r'(?<=\w)\]'
-                    , r'\1', Ftext, flags=re.VERBOSE)
-            #print(f"End conv\n{Ftext}")
-
-
-        ##  7. 대소 비교 문자('<', '>') 텍스트 변환.
-        #   '<', '>'는 다른 특수 문자와 조합하여 '구분 문자' 역할로 사용하는 경우도 있다.
-        #   이를 제외(삭제)하면 크기나 백분율 비교로 사용하므로 이들에 대한 명확한 텍스트 변환이 필요하다.
-        #   대소 구분 목적으로 사용하는 기호 표현을 'less than', 'greater than'으로 텍스트 변경한다.
-        Ftext = re.sub(r'>\s(?=right|left|Lt|Rt|\d|Grade)', 'greater than ', Ftext)
-        Ftext = re.sub(r'<\s(?=right|left|Lt|Rt|\d|Grade)', 'less than ', Ftext)
-        # Ftext = re.sub(r'<', 'less than', Ftext)
-
-        ## 8. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
-        #print(f"Start conv\n{Ftext}")
-        Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
-
-        # 테스트 목적의 조건문 탐색
-        if ')' in Ftext :
-            #or 'greater' in Ftext:
-            #print(f"Before Change\n{Ftext}")
-            #Ftext = re.sub(r'(\w)(\,|\.)', r'\1', Ftext, flags=re.VERBOSE)
-            print(f"After Change\n{Ftext}")
-
-        ## 모든 Raw Data 탐색 결과를 저장 후 return.
-        raw_find.append(raw_data)
-        after_find.append(Ftext)
-
-        # 테스트 목적의 반복문 도중 반환.
-        if cnt == 100 :
-            break
-
-    return raw_find, after_find
+print("단독 수치 추출 결과:", unlabeled_matches)
+print("복원된 문장:", masked)

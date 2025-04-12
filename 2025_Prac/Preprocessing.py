@@ -34,6 +34,15 @@ def empty_to_missing(df : pd.DataFrame):
       print('-----------------------------------------------------------')
 
 
+# 이미 정형화된 수치 데이터에 대한 마스킹 작업 (중복 변환 방지 목적).
+mask_matches = []
+def Mask_Repl(match) :
+    token = f"__PROTECT{len(mask_matches)}__"
+    mask_matches.append((token, match.group(0)))  # 원문 저장
+    return token
+
+
+
 # Findings 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
 # 사람이 이해하기 쉽도록 구분할 목적의 순서 기호 ( 1., 2. 등)
 # 특수 문자 표현 (2개 이상의 줄넘김 또는 --> 등의 방향 표시 등)
@@ -219,6 +228,50 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                 # print(matches)
                 # print(Ctext)
 
+
+        # 3차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
+        # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(\-{1,4}\>?)', Ctext)
+        if matches :
+            for grplist in matches :
+                if '.' in grplist[0] :
+                    Ltmp = str(int(float(grplist[0]) * 10))
+                    Lvalue = re.sub('\.', '\.', grplist[0])
+                else :
+                    Ltmp, Lvalue = grplist[0], grplist[0]
+
+                if '.' in grplist[2] :
+                    Wtmp = str(int(float(grplist[2]) * 10))
+                    Wvalue = re.sub('\.', '\.', grplist[2])
+                else:
+                    Wtmp, Wvalue = grplist[2], grplist[2]
+
+                if '.' in grplist[4] :
+                    Htmp = str(int(float(grplist[4]) * 10))
+                    Hvalue = re.sub('\.', '\.', grplist[4])
+                else :
+                    Htmp, Hvalue = grplist[4], grplist[4]
+
+                # Length 정형화
+                Ctext = re.sub(fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
+                                fr' Length {Ltmp}mm ',
+                                Ctext)
+
+                # Width 정형화
+                Ctext = re.sub(fr'(?<=Length {Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
+                               fr' Width {Wtmp}mm ',
+                               Ctext)
+
+                # Height 정형화
+                Ctext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm).+{Hvalue}' + r'\s*\-{1,4}\>?',
+                               fr' Height {Htmp}mm change',
+                               Ctext)
+            # print(matches)
+            # print(Ctext)
+
+
+
+
         # 2차원 크기 데이터 정형화
         matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\-)?(cm|mm)', Ctext)
         if matches :
@@ -237,14 +290,34 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                                     fr'Width {Wtmp}mm '
                                     , Ctext)
                 else :
-                    # Length 정형화
-                    Ctext = re.sub(fr'([^1-9]|^){grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)',
-                                   fr' Length {grplist[0]}mm '
-                                    , Ctext)
-                    # Width 정형화
-                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*\-?mm',
-                                   fr'Width {grplist[2]}mm '
-                                   , Ctext)
+                    # mm 단위인데 실수 형태인 경우, 반올림하여 정수화.
+                    if grplist[-1] == 'mm' and '.' in grplist[0]:
+                        Ltmp = str(round(float(grplist[0])))
+                        Lvalue = re.sub('\.', '\.', grplist[0])
+                        Ctext = re.sub(fr'([^1-9]|^){Lvalue}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)',
+                                       fr' Length {Ltmp}mm ',
+                                       Ctext)
+                    else :
+                        # Length 정형화
+                        Ctext = re.sub(
+                            fr'([^1-9]|^){grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)',
+                            fr' Length {grplist[0]}mm '
+                            , Ctext)
+
+                    if grplist[-1] == 'mm' and '.' in grplist[2]:
+                        Wtmp = str(round(float(grplist[2])))
+                        Wvalue = re.sub('\.', '\.', grplist[2])
+                        Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*\-?mm',
+                                       fr'Width {Wtmp}mm '
+                                       , Ctext)
+                    else :
+                        # Width 정형화
+                        Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*\-?mm',
+                                       fr'Width {grplist[2]}mm '
+                                       , Ctext)
+
+
+
             # print(matches)
             # print(Ctext)
 
@@ -265,22 +338,69 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                 else :
                     Wtmp, Wvalue = grplist[2], grplist[2]
 
-                print(Ltmp, Lvalue, Wtmp, Wvalue)
+                #print(f"{Ltmp}, {Lvalue}, {Wtmp}, {Wvalue}")
+                #print(Ctext)
                 # Length 정형화
-                Ctext = re.sub(fr'[^1-9]{Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*\-{1,4}\>?)',
+                Ctext = re.sub(fr'([^1-9]|^|\(){Lvalue}'+ r'(?=\s*(x|\*|X)\s*\d{1,2}(\.\d{1,2})?\s*\-{1,4}\>?)',
                                fr' Length {Ltmp}mm ',
                                Ctext)
 
                 # Width 정형화
-                Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*\-{1,4}\>?',
+                Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}' + r'\s*\-{1,4}\>?',
                                fr'Width {Wtmp}mm change ',
                                Ctext)
 
-            print(matches)
-            print(Ctext)
+            # print(matches)
+            # print(Ctext)
 
-        # matches = re.findall(r'(\d{1,2}(?:\.\d{1,2}))\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*', Ctext)
-        # if matches :
+        # 1차원 크기 데이터 정형화 (3차원, 2차원 크기 데이터에 대해 모두 정형화가 완료된 상태여야 한다.)
+        # 이미 정형화가 완료된 텍스트는 중복 변환되지 않도록 마스킹 처리 후 마지막에 복원하는 방법으로 구현.
+        global mask_matches
+        mask_matches = []
+        mask_pattern = re.compile(r'\b(?:Length|Width|Height)\s+\d{1,2}(?:\.\d{1,2})?mm\b')
+        masked = mask_pattern.sub(Mask_Repl, Ctext) # 정형화 전 이미 정형화된 데이터는 겹치지 않도록 마스킹.
+
+        # 마스킹된 텍스트에서 크기 변경 전 1차원 크기 데이터 추출 (ex. 1.5 - 2.1cm 형태에서 1.5 값)
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(\-{1,5}>?).*?(cm|mm)', masked)
+        if matches :
+            # 중복되는 Group이 2번 이상 정형화되지 않도록 세트화.
+            matches = list(set(matches))
+            for grplist in matches :
+                # 2.2-cm, 20-mm 등의 단일 값인 경우
+
+                print(grplist)
+                print(masked)
+
+        # 마스킹된 텍스트에서 1차원 크기 데이터 추출.
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(mm|cm)\b', masked)
+        if matches :
+            # 중복되는 Group에 의해 2번 정형화되지 않도록 세트화.
+            matches = list(set(matches))
+            for grplist in matches :
+                if grplist[-1] == 'cm' :
+                    Ltmp = str(int(float(grplist[0]) * 10))
+                    Lvalue = re.sub('\.', '\.', grplist[0])
+                    masked = re.sub(fr'([^1-9]|^|\(){Lvalue}\s*cm', fr' Length {Ltmp}mm ', masked)
+                elif grplist[-1] == 'mm' and  '.' in grplist[0] :
+                    #Ltmp = re.sub(r'(\d{1,2}).+', r'\1', grplist[0])
+                    Ltmp = str(round(float(grplist[0])))
+                    Lvalue = re.sub('\.', '\.', grplist[0])
+                    #print(Ctext)
+                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length ))({Lvalue}\s*mm)', fr' Length {Ltmp}mm ', masked)
+                    #print(Ctext)
+                else :
+                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length )){grplist[0]}\s*mm', fr' Length {grplist[0]}mm', masked)
+
+                # 마스킹된 텍스트를 복원 후, 최종 결과를 Ctext에 저장.
+                for token, text in mask_matches:
+                    masked = masked.replace(token, text)
+
+                Ctext = masked
+
+        # 실수 표현된 텍스트 데이터 찾아보기
+        # matches = re.findall(r'\d{1,2}\.\d{1,2}', Ctext)
+        # if matches and len(matches) == 2:
+        #     print(matches)
         #     print(Ctext)
 
 
