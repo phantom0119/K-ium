@@ -23,3 +23,12 @@ for token, original in protected_matches:
 
 print("단독 수치 추출 결과:", unlabeled_matches)
 print("복원된 문장:", masked)
+
+
+\d{1,2}(cm|mm)\s*-+>
+
+ A-Com = Anterior Communicating Artery
+ jx. = junction
+ F/I = Further Investigation
+ (CE) = Contrast Enhancement
+ T2* = T2-star (T2-star weighted imaging)
