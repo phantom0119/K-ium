@@ -66,6 +66,12 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         ##  1. Findings에 포함된 주요 의학 용어 정형화.
         #   분류 기준이 아닌 소견 내용 구분 목적의 텍스트이므로 삭제.
         Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|CI\,', '', Ftext)
+        Ftext = re.sub(r'[sS]\/[pP]', ' status-post ', Ftext)
+        Ftext = re.sub(r'[rR][/][oO]', ' rule-out ', Ftext)
+        Ftext = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up', ' follow-up ', Ftext)
+        Ftext = re.sub(
+            r'[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]onspecific'
+            ,' non-specific ', Ftext)
 
         ## 2. 양성과 음성을 구분하는 문자를 명확한 단어로 변경한다.
         ## (+) --> positive, (-) --> negative
@@ -74,6 +80,85 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
 
         if '(-)' in Ftext:
             Ftext = re.sub(r'\(\-\)', 'negative', Ftext)
+
+        # 3차원 크기 데이터 정형화
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\(neck\))?\s*(cm|mm)',Ftext)
+        if matches:
+            print(matches)
+            for grplist in matches:  # 매칭된 그룹 리스트 순환. 6개의 원소가 하나의 그릅에 포함.
+                if grplist[-1] == 'cm':  # cm 단위라면 mm 단위로 변환 (cm 단위는 소수점이 포함되지만, mm 단위는 정수만으로 표현 가능).
+                    Ltmp = str(int(float(grplist[0]) * 10))  # 정형화 값으로 사용할 mm단위의 L,W,H 값.
+                    Wtmp = str(int(float(grplist[2]) * 10))
+                    Htmp = str(int(float(grplist[4]) * 10))
+                    Lvalue = re.sub(r'\.', r'\\.', grplist[0])  # Length Value : 특수문자 '.'를 정규표현식에서 일반 문자로 보이도록 변경.
+                    Wvalue = re.sub(r'\.', r'\\.', grplist[2])  # Width Value.
+                    Hvalue = re.sub(r'\.', r'\\.', grplist[4])  # Height Value.
+
+                    # Length 정형화
+                    Ftext = re.sub(fr'{Lvalue}' + r'(?=\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*cm)'
+                        ,fr' Length-{Ltmp}mm '
+                        , Ftext)
+                    # Width 정형화
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm ).+{Wvalue}\s*(cm)?(?=(x|\*|X)\.?\s*{Hvalue})'
+                        ,fr'Width-{Wtmp}mm '
+                        , Ftext)
+                    # Height 정형화
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm Width-{Wtmp}mm ).+{Hvalue}\s*cm'
+                        ,fr'Height-{Htmp}mm '
+                        , Ftext)
+                else:
+                    Ftext = re.sub(fr'{grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(\(neck\))?\s*mm)'
+                        ,fr' Length-{grplist[0]}mm '
+                        , Ftext)
+                    Ftext = re.sub(fr'(?<=Length-{grplist[0]}mm ).+{grplist[2]}\s*(mm)?(?=(x|\*|X)\.?\s*{grplist[4]})'
+                        ,fr'Width-{grplist[2]}mm '
+                        , Ftext)
+                    Ftext = re.sub(fr'(?<=Length-{grplist[0]}mm Width-{grplist[2]}mm ).+{grplist[4]}\s*mm'
+                        ,fr'Height-{grplist[4]}mm '
+                        , Ftext)
+                # print(matches)
+                # print(Ctext)
+
+        # 3차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
+        # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(\-{1,4}\>?)', Ftext)
+        if matches:
+            for grplist in matches:
+                if '.' in grplist[0]:
+                    Ltmp = str(int(float(grplist[0]) * 10))
+                    Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+                else:
+                    Ltmp, Lvalue = grplist[0], grplist[0]
+
+                if '.' in grplist[2]:
+                    Wtmp = str(int(float(grplist[2]) * 10))
+                    Wvalue = re.sub(r'\.', r'\\.', grplist[2])
+                else:
+                    Wtmp, Wvalue = grplist[2], grplist[2]
+
+                if '.' in grplist[4]:
+                    Htmp = str(int(float(grplist[4]) * 10))
+                    Hvalue = re.sub(r'\.', r'\\.', grplist[4])
+                else:
+                    Htmp, Hvalue = grplist[4], grplist[4]
+
+                # Length 정형화
+                Ftext = re.sub(
+                        fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
+                        fr' Length-{Ltmp}mm ',
+                        Ftext)
+
+                # Width 정형화
+                Ftext = re.sub(fr'(?<=Length {Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
+                                   fr' Width-{Wtmp}mm ',
+                                   Ftext)
+
+                # Height 정형화
+                Ftext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm).+{Hvalue}' + r'\s*\-{1,4}\>?',
+                                   fr' Height-{Htmp}mm change ',
+                                   Ftext)
+            # print(matches)
+            # print(Ctext)
 
         ##  3. 크기가 변경되는 데이터를 증가(increase) 또는 감소(decrease)로 변경한다.
         #   하나의 의미로 통합하기 위해 특수 문자를 포함한 크기 값의 텍스트를 변경함.
@@ -162,9 +247,8 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
 
         # matches = re.findall(r'\.|\,', Ctext)
-        matches = re.findall(r'[가-힣]', raw_data)
+        matches = re.findall(r'(cm|mm)', raw_data)
         if matches:
-            #print(matches)
             print("##########################################")
             print(raw_data)
             print(f"Need to Replace\n{Ftext}")
@@ -216,7 +300,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ctext = re.sub(r'\/[cC]', ' with ', Ctext)
         Ctext = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?', ' anterior communicating ', Ctext)
         Ctext = re.sub(r'[cC][/][Ww]', ' consistent-with ', Ctext)
-        Ctext = re.sub(r'[fF]\/[iI]', ' further investigation ', Ctext)
+        Ctext = re.sub(r'[fF]\/[iI]', ' further-investigation ', Ctext)
         Ctext = re.sub(r'Lt\.?\s*\>\s*Rt\.?|Rt\.?\s*\<\s*Lt\.?|[lL]eft\s*\>\s*[rR]ight|[rR]ight\s*\<\s*[lL]eft', ' left greater-than right', Ctext)
         Ctext = re.sub(r'Rt\.?\s*\>\s*Lt\.?|Lt\.?\s*\<\s*Rt\.?|[rR]ight\s*\>\s*[lL]eft|[lL]eft\s*\<\s*[rR]ight', ' right greater-than left', Ctext)
         Ctext = re.sub(r'\(\+\)', ' positive ', Ctext)
@@ -355,21 +439,21 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                                    fr' Length-{Ltmp}mm ',
                                    Ctext)
                     # Width 정형화
-                    Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*(cm)?(?=(x|\*|X)\.?\s*{Hvalue})',
+                    Ctext = re.sub(fr'(?<=Length-{Ltmp}mm ).+{Wvalue}\s*(cm)?(?=(x|\*|X)\.?\s*{Hvalue})',
                                    fr'Width-{Wtmp}mm '
                                    , Ctext)
                     # Height 정형화
-                    Ctext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm ).+{Hvalue}\s*cm',
+                    Ctext = re.sub(fr'(?<=Length-{Ltmp}mm Width-{Wtmp}mm ).+{Hvalue}\s*cm',
                                    fr'Height-{Htmp}mm '
                                    , Ctext)
                 else :
                     Ctext = re.sub(fr'{grplist[0]}'+r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*mm)',
                                    fr' Length-{grplist[0]}mm ',
                                    Ctext)
-                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*(mm)?(?=(x|\*|X)\.?\s*{grplist[4]})',
+                    Ctext = re.sub(fr'(?<=Length-{grplist[0]}mm ).+{grplist[2]}\s*(mm)?(?=(x|\*|X)\.?\s*{grplist[4]})',
                                    fr'Width-{grplist[2]}mm ',
                                    Ctext)
-                    Ctext = re.sub(fr'(?<=Length {grplist[0]}mm Width {grplist[2]}mm ).+{grplist[4]}\s*mm',
+                    Ctext = re.sub(fr'(?<=Length-{grplist[0]}mm Width-{grplist[2]}mm ).+{grplist[4]}\s*mm',
                                    fr'Height-{grplist[4]}mm ',
                                    Ctext)
                 # print(matches)
