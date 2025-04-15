@@ -132,7 +132,7 @@ def sent_tokenizing(DSet : pd.DataFrame):
       # Findings, Conclusion 데이터를 모두 사용하므로 하나의 구성요소로 만든다.
       for idx, Fs in enumerate(zip(DSet.Findings, DSet.Conclusion)):
             text = Fs[0] + Fs[1]
-            sentences = sent_tokenize(text) # tex를 tokenizing한 문장.
+            sentences = sent_tokenize(text) # text를 tokenizing한 문장.
             Bert_sentences = "[CLS] "
             for s in sentences:
                   Bert_sentences += s + " [SEP] "

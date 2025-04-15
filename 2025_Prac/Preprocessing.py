@@ -2,12 +2,17 @@
 - TrainCopySet.csv : 원본 데이터 Set
 -
 """
-import pandas as pd     # DataFrame
-import re               # Regular Expression
-import nltk             # Word Tokenization
-from nltk.tokenize import word_tokenize
+import pandas as pd                         # DataFrame
+import re                                   # Regular Expression
+import nltk                                 # Word Tokenization
+from nltk.tokenize import word_tokenize     # 단어 자연어 토큰화
+from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
+from transformers import BertTokenizer
 #nltk.download('punkt_tab')     # LookupError, punkt resource download
-
+#from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
+tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+stopwords = ('and', 'at', 'a', 'an', 'as', 'in', 'to', 'the', 'of', 'or',
+             '가', '이', '과', '그', '볼', '수', '의', '을', '인해', '및', '년', '또는', '그리고', '에', '현')
 
 def show_info(df: pd.DataFrame):
     """
@@ -48,17 +53,17 @@ def Mask_Repl(match) :
 # Findings 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
 # 사람이 이해하기 쉽도록 구분할 목적의 순서 기호 ( 1., 2. 등)
 # 특수 문자 표현 (2개 이상의 줄넘김 또는 --> 등의 방향 표시 등)
-def Findings_Preprocessing(df : pd.DataFrame) :
-    cnt = 0             # Test print count
-    raw_find = []       # Findings Raw Data List
-    after_find = []     # Findings Preprocessing List
+def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
+    cnt = 0                         # Test print count
+    raw_find = []                   # Findings Raw Data List
+    after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', '')
         raw_data = Ftext
 
-        ##  1. Findings에 포함된 'Clinical information(CI)' Keyword 제거
+        ##  1. Findings에 포함된 주요 의학 용어 정형화.
         #   분류 기준이 아닌 소견 내용 구분 목적의 텍스트이므로 삭제.
         Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|CI\,', '', Ftext)
 
@@ -148,38 +153,44 @@ def Findings_Preprocessing(df : pd.DataFrame) :
         #   '<', '>'는 다른 특수 문자와 조합하여 '구분 문자' 역할로 사용하는 경우도 있다.
         #   이를 제외(삭제)하면 크기나 백분율 비교로 사용하므로 이들에 대한 명확한 텍스트 변환이 필요하다.
         #   대소 구분 목적으로 사용하는 기호 표현을 'less than', 'greater than'으로 텍스트 변경한다.
-        Ftext = re.sub(r'>\s(?=right|left|Lt|Rt|\d|Grade)', 'greater than ', Ftext)
-        Ftext = re.sub(r'<\s(?=right|left|Lt|Rt|\d|Grade)', 'less than ', Ftext)
+        Ftext = re.sub(r'>\s(?=right|left|Lt|Rt|\d|Grade)|greater than', ' greater-than ', Ftext)
+        Ftext = re.sub(r'<\s(?=right|left|Lt|Rt|\d|Grade)|less than', ' less-than ', Ftext)
         # Ftext = re.sub(r'<', 'less than', Ftext)
 
         ## 8. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
         #print(f"Start conv\n{Ftext}")
         Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
 
-        # 테스트 목적의 조건문 탐색
-        if ')' in Ftext :
-            #or 'greater' in Ftext:
-            #print(f"Before Change\n{Ftext}")
-            #Ftext = re.sub(r'(\w)(\,|\.)', r'\1', Ftext, flags=re.VERBOSE)
-            print(f"After Change\n{Ftext}")
+        # matches = re.findall(r'\.|\,', Ctext)
+        matches = re.findall(r'[가-힣]', raw_data)
+        if matches:
+            #print(matches)
+            print("##########################################")
+            print(raw_data)
+            print(f"Need to Replace\n{Ftext}")
+            print()
+            print("##########################################")
+        # cnt += 1
+        # if cnt == 30 : break
 
         ## 모든 Raw Data 탐색 결과를 저장 후 return.
         raw_find.append(raw_data)
         after_find.append(Ftext)
 
+        redf.loc[i, 'finding'] = Ftext
+
         # 테스트 목적의 반복문 도중 반환.
-        if cnt == 100 :
-            break
+        # if cnt == 100 :
+        #     break
 
     return raw_find, after_find
 
 
 # Conclusion 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
-def Conclusion_Preprocessing(df : pd.DataFrame) :
+def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     cnt = 0         # Test print count
     raw_conc = []   # Conclusion Raw Data List
     after_conc = [] # Conclusion Preprocesing List
-    token_list = [] # Tokenization List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
         row = df.iloc[i]
@@ -188,14 +199,14 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         raw_data = Ctext
 
         ## x. 특수문자가 포함된 의학 용어 변환.
-        Ctext = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)', ' posterior communicating artery ', Ctext)
-        Ctext = re.sub(r'[pP]\-[cC][Oo][Mm]\.?|PCOM\.?', ' posterior communicating ', Ctext)
+        Ctext = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)', ' posterior-communicating-artery ', Ctext)
+        Ctext = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?', ' posterior-communicating ', Ctext)
         Ctext = re.sub(r'\(CE\)', ' contrast-enhancement ', Ctext)
         Ctext = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', Ctext)
-        Ctext = re.sub(r'op\.bed[., (]', ' operative bed ', Ctext)
+        Ctext = re.sub(r'op\.bed[., (]|(at )?op bed\.', ' operative-bed ', Ctext)
         Ctext = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up', ' follow-up ', Ctext)
-        Ctext = re.sub(r'[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|Nonspecific', ' non-specific ', Ctext)
-        Ctext = re.sub(r'op\.site[., (]', ' operative site ', Ctext)
+        Ctext = re.sub(r'[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]onspecific', ' non-specific ', Ctext)
+        Ctext = re.sub(r'op\.site[., (]|(at )?(the )?op site', ' operative-site ', Ctext)
         Ctext = re.sub(r'postop\.change[., (]', ' postoperative-change ', Ctext)
         Ctext = re.sub(r'e\.g\.?', ' ', Ctext)
         Ctext = re.sub(r'[Jj][Xx]\.', ' junction ', Ctext)
@@ -206,13 +217,15 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         Ctext = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?', ' anterior communicating ', Ctext)
         Ctext = re.sub(r'[cC][/][Ww]', ' consistent-with ', Ctext)
         Ctext = re.sub(r'[fF]\/[iI]', ' further investigation ', Ctext)
-        Ctext = re.sub(r'Lt\.?\s*\>\s*Rt\.?|Rt\.?\s*\<\s*Lt\.?|[lL]eft\s*\>\s*[rR]ight|[rR]ight\s*\<\s*[lL]eft', ' left greater than right', Ctext)
-        Ctext = re.sub(r'Rt\.?\s*\>\s*Lt\.?|Lt\.?\s*\<\s*Rt\.?|[rR]ight\s*\>\s*[lL]eft|[lL]eft\s*\<\s*[rR]ight', ' right greater than left', Ctext)
+        Ctext = re.sub(r'Lt\.?\s*\>\s*Rt\.?|Rt\.?\s*\<\s*Lt\.?|[lL]eft\s*\>\s*[rR]ight|[rR]ight\s*\<\s*[lL]eft', ' left greater-than right', Ctext)
+        Ctext = re.sub(r'Rt\.?\s*\>\s*Lt\.?|Lt\.?\s*\<\s*Rt\.?|[rR]ight\s*\>\s*[lL]eft|[lL]eft\s*\<\s*[rR]ight', ' right greater-than left', Ctext)
         Ctext = re.sub(r'\(\+\)', ' positive ', Ctext)
         Ctext = re.sub(r'\(\-\)', ' negative ', Ctext)
         Ctext = re.sub(r'C1\,2', ' atlas-axis ', Ctext)
         Ctext = re.sub(r'T(\d)\*', r'T\1-star', Ctext)
         Ctext = re.sub(r'ICAs', 'ICA', Ctext)
+        Ctext = re.sub(r'ICHs', 'ICH', Ctext)
+        Ctext = re.sub(r'PCAs', 'PCA', Ctext)
         Ctext = re.sub(r'P(\d)', r'P\1-segment', Ctext)
 
         Ctext = re.sub(r'the.*?(both|bilateral).*frontal parietal temporal lobe(s)?',
@@ -339,25 +352,25 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
 
                     # Length 정형화
                     Ctext = re.sub(fr'{Lvalue}' + r'(?=\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*cm)',
-                                   fr' Length {Ltmp}mm ',
+                                   fr' Length-{Ltmp}mm ',
                                    Ctext)
                     # Width 정형화
                     Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*(cm)?(?=(x|\*|X)\.?\s*{Hvalue})',
-                                   fr'Width {Wtmp}mm '
+                                   fr'Width-{Wtmp}mm '
                                    , Ctext)
                     # Height 정형화
                     Ctext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm ).+{Hvalue}\s*cm',
-                                   fr'Height {Htmp}mm '
+                                   fr'Height-{Htmp}mm '
                                    , Ctext)
                 else :
                     Ctext = re.sub(fr'{grplist[0]}'+r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*mm)',
-                                   fr' Length {grplist[0]}mm ',
+                                   fr' Length-{grplist[0]}mm ',
                                    Ctext)
                     Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*(mm)?(?=(x|\*|X)\.?\s*{grplist[4]})',
-                                   fr'Width {grplist[2]}mm ',
+                                   fr'Width-{grplist[2]}mm ',
                                    Ctext)
                     Ctext = re.sub(fr'(?<=Length {grplist[0]}mm Width {grplist[2]}mm ).+{grplist[4]}\s*mm',
-                                   fr'Height {grplist[4]}mm ',
+                                   fr'Height-{grplist[4]}mm ',
                                    Ctext)
                 # print(matches)
                 # print(Ctext)
@@ -388,17 +401,17 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
 
                 # Length 정형화
                 Ctext = re.sub(fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
-                                fr' Length {Ltmp}mm ',
+                                fr' Length-{Ltmp}mm ',
                                 Ctext)
 
                 # Width 정형화
                 Ctext = re.sub(fr'(?<=Length {Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
-                               fr' Width {Wtmp}mm ',
+                               fr' Width-{Wtmp}mm ',
                                Ctext)
 
                 # Height 정형화
                 Ctext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm).+{Hvalue}' + r'\s*\-{1,4}\>?',
-                               fr' Height {Htmp}mm change ',
+                               fr' Height-{Htmp}mm change ',
                                Ctext)
             # print(matches)
             # print(Ctext)
@@ -424,12 +437,12 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                 # Length 정형화
                 Ctext = re.sub(
                         fr'([^1-9]|^|\(){Lvalue}' + r'(?=\s*(x|\*|X)\s*\d{1,2}(\.\d{1,2})?(cm|mm)?\s*\-{1,4}\>*)',
-                        fr' Length {Ltmp}mm ',
+                        fr' Length-{Ltmp}mm ',
                         Ctext)
 
                 # Width 정형화
                 Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}(cm|mm)?' + r'\s*\-{1,4}\>*',
-                            fr'Width {Wtmp}mm change ',
+                            fr'Width-{Wtmp}mm change ',
                             Ctext)
             # print(matches)
             # print(Ctext)
@@ -446,11 +459,11 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                     Wvalue = re.sub(r'\.', r'\\.', grplist[2])
                     # Length 정형화
                     Ctext = re.sub( fr'([^1-9]|^){Lvalue}' + r'(?=\s*(cm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?(cm|\)))',
-                                    fr' Length {Ltmp}mm '
+                                    fr' Length-{Ltmp}mm '
                                     , Ctext)
                     # Width 정형화
                     Ctext = re.sub( fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*\-?(cm|\))',
-                                    fr'Width {Wtmp}mm '
+                                    fr'Width-{Wtmp}mm '
                                     , Ctext)
                 else :
                     # mm 단위인데 실수 형태인 경우, 반올림하여 정수화.
@@ -458,25 +471,25 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                         Ltmp = str(round(float(grplist[0])))
                         Lvalue = re.sub(r'\.', r'\\.', grplist[0])
                         Ctext = re.sub(fr'([^1-9]|^){Lvalue}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)',
-                                       fr' Length {Ltmp}mm ',
+                                       fr' Length-{Ltmp}mm ',
                                        Ctext)
                     else :
                         # Length 정형화
                         Ctext = re.sub(
                             fr'([^1-9]|^){grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)',
-                            fr' Length {grplist[0]}mm '
+                            fr' Length-{grplist[0]}mm '
                             , Ctext)
 
                     if grplist[-1] == 'mm' and '.' in grplist[2]:
                         Wtmp = str(round(float(grplist[2])))
                         Wvalue = re.sub(r'\.', r'\\.', grplist[2])
                         Ctext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}\s*\-?mm',
-                                       fr'Width {Wtmp}mm '
+                                       fr'Width-{Wtmp}mm '
                                        , Ctext)
                     else :
                         # Width 정형화
                         Ctext = re.sub(fr'(?<=Length {grplist[0]}mm ).+{grplist[2]}\s*\-?mm',
-                                       fr'Width {grplist[2]}mm '
+                                       fr'Width-{grplist[2]}mm '
                                        , Ctext)
             # print(matches)
             # print(Ctext)
@@ -487,7 +500,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         # 이미 정형화가 완료된 텍스트는 중복 변환되지 않도록 마스킹 처리 후 마지막에 복원하는 방법으로 구현.
         global mask_matches
         mask_matches = []
-        mask_pattern = re.compile(r'\b(?:Length|Width|Height)\s+\d{1,2}(?:\.\d{1,2})?mm\b')
+        mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,2}(?:\.\d{1,2})?mm\b')
         masked = mask_pattern.sub(Mask_Repl, Ctext) # 정형화 전 이미 정형화된 데이터는 겹치지 않도록 마스킹.
 
         # # 마스킹된 텍스트에서 크기 변경 전 1차원 크기 데이터 추출 (ex. 1.5 - 2.1cm 형태에서 1.5 값)
@@ -501,27 +514,27 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                     if grplist[-1] == 'cm':
                         Ltmp = str(int(float(grplist[0]) * 10))
                         Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                        masked = re.sub(fr'{Lvalue}\-cm', fr' Length {Ltmp}mm ', masked)
+                        masked = re.sub(fr'{Lvalue}\-cm', fr' Length-{Ltmp}mm ', masked)
                     elif grplist[-1] == 'mm':
                         if '.' in grplist[0]:
                             Ltmp = str(int(round(float(grplist[0]))))
                             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                            masked = re.sub(fr'{Lvalue}\-mm', fr' Length {Ltmp}mm ', masked)
+                            masked = re.sub(fr'{Lvalue}\-mm', fr' Length-{Ltmp}mm ', masked)
                         else :
-                            masked = re.sub(fr'{grplist[0]}\-mm[.,]?', fr' Length {grplist[0]}mm ', masked)
+                            masked = re.sub(fr'{grplist[0]}\-mm[.,]?', fr' Length-{grplist[0]}mm ', masked)
                 # 크기 변동 이전의 값 처리
                 elif '>' in grplist[1]:
                     if grplist[-1] == 'cm':
                         Ltmp = str(int(float(grplist[0]) * 10))
                         Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                        masked = re.sub(fr'{Lvalue}(cm)?\s*\-+\>', fr' Length {Ltmp}mm change ', masked)
+                        masked = re.sub(fr'{Lvalue}(cm)?\s*\-+\>', fr' Length-{Ltmp}mm change ', masked)
                     elif grplist[-1] == 'mm':
                         if '.' in grplist[0]:
                             Ltmp = str(int(round(float(grplist[0]))))
                             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                            masked = re.sub(fr'{Lvalue}\s*\s*\-+\>', fr' Length {Ltmp}mm change ', masked)
+                            masked = re.sub(fr'{Lvalue}\s*\s*\-+\>', fr' Length-{Ltmp}mm change ', masked)
                         else :
-                            masked = re.sub(fr'{grplist[0]}\s*\s*\-+\>', fr' Length {grplist[0]}mm change ', masked)
+                            masked = re.sub(fr'{grplist[0]}\s*\s*\-+\>', fr' Length-{grplist[0]}mm change ', masked)
 
                 # 마스킹된 텍스트를 복원 후, 최종 결과를 Ctext에 저장.
                 for token, text in mask_matches:
@@ -532,7 +545,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
 
 
         mask_matches = []
-        mask_pattern = re.compile(r'\b(?:Length|Width|Height)\s+\d{1,2}(?:\.\d{1,2})?mm\b')
+        mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,2}(?:\.\d{1,2})?mm\b')
         masked = mask_pattern.sub(Mask_Repl, Ctext)
 
         # 마스킹된 텍스트에서 1차원 크기 데이터 추출.
@@ -544,14 +557,14 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                 if grplist[-1] == 'cm' :
                     Ltmp = str(int(float(grplist[0]) * 10))
                     Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                    masked = re.sub(fr'([^1-9]|^|\(){Lvalue}\s*cm', fr' Length {Ltmp}mm ', masked)
+                    masked = re.sub(fr'([^1-9]|^|\(){Lvalue}\s*cm', fr' Length-{Ltmp}mm ', masked)
                 elif grplist[-1] == 'mm' and  '.' in grplist[0] :
                     #Ltmp = re.sub(r'(\d{1,2}).+', r'\1', grplist[0])
                     Ltmp = str(round(float(grplist[0])))
                     Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length ))({Lvalue}\s*mm)', fr' Length {Ltmp}mm ', masked)
+                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length ))({Lvalue}\s*mm)', fr' Length-{Ltmp}mm ', masked)
                 else :
-                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length )){grplist[0]}\s*mm', fr' Length {grplist[0]}mm', masked)
+                    masked = re.sub(fr'([^1-9]|^|\(|(?<!Length )){grplist[0]}\s*mm', fr' Length-{grplist[0]}mm', masked)
 
                 # 마스킹된 텍스트를 복원 후, 최종 결과를 Ctext에 저장.
                 for token, text in mask_matches:
@@ -596,7 +609,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         #   그 외에는 추가 정보로 사용할 수 있으므로 별도로 전처리 작업을 진행한다.
         Ctext = re.sub(r'(\(|\[).*?(IDX|Img|IM|Idx).*(\)|\])|'
                        r'\(20\d{2}(\.|\-).*\)\.?|'
-                       r'[dD][dD]x\.\)?|'
+                       r'[dD][dD]x[.:]\)?|'
                        r'rec\)|'
                        r'etc\.\)', ' ', Ctext)
 
@@ -626,9 +639,8 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
                        , ' ', Ctext)
 
         # 대부분의 전처리를 완료 후 마무리 전처리 단계
-
-        Ctext = re.sub(r'\>\s*(?=\d{1,2}.*?(mm|\%)|Length)', ' greater than', Ctext)
-        Ctext = re.sub(r'\<\s*(?=\d{1,2}.*?(mm|\%)|Length)', ' less than', Ctext)
+        Ctext = re.sub(r'\>\s*(?=\d{1,2}.*?(mm|\%)|Length)|greater than', ' greater-than', Ctext)
+        Ctext = re.sub(r'\<\s*(?=\d{1,2}.*?(mm|\%)|Length)|less than', ' less-than', Ctext)
 
         Ctext = re.sub(r' - |[ ,.*,][,.]|\(\*+\)\,?|^<|^>|(?<=\w)(\>|\<)\s*|→|\?+\)|^\#|\+|(?<=\w)\s*(\>|\<)\s*(?=\w)', ' ', Ctext)
         Ctext = re.sub(r'(\d)\~(\d)', r'\1-\2', Ctext)
@@ -644,18 +656,24 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         Ctext = re.sub(r'both frontoparietal lobes cerebellum',
                        r' left-parietal-lobe left-frontal-lobe left-cerebellum right-parietal-lobe right-frontal-lobe right-cerebellum ', Ctext)
 
-        token_test = word_tokenize(Ctext)
-        token_list.append(token_test)
+        token_test = tokenizer_bert.tokenize(Ctext)  # 전처리한 소견을 토큰화
+        token_test = merge_wordpieces(token_test)  # 토큰 데이터를 재결합
+        token_test = reorg_wordpieces(token_test)  # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
         #matches = re.findall(r'\.|\,', Ctext)
-        matches = re.findall(r'&', raw_data)
-        if matches:
-            print(matches)
-            print("##########################################")
-            print(raw_data)
-            print(f"Need to Replace\n{Ctext}")
-            print(token_test)
-            print("##########################################")
+        matches = re.findall(r'[가-힣]', raw_data)
+        # if matches:
+        #     #print(matches)
+        #     print("##########################################")
+        #     print(raw_data)
+        #     print(f"Need to Replace\n{Ctext}")
+        #     ccnt = 1
+        #     for t in list(set(token_test)):
+        #         if ccnt %10 == 0: print()
+        #         print(f"'{t}'", end= ' ')
+        #         ccnt += 1
+        #     print()
+        #     print("##########################################")
             # cnt += 1
             # if cnt == 30 : break
 
@@ -663,7 +681,9 @@ def Conclusion_Preprocessing(df : pd.DataFrame) :
         raw_conc.append(raw_data)
         after_conc.append(Ctext)
 
-    return raw_conc, after_conc, token_list
+        redf.loc[i, 'conclusion'] = Ctext
+
+    return raw_conc, after_conc
 
 # 테스트 목적의 csv 파일 반환.
 # Raw_Text : 텍스트 데이터 원본.
@@ -677,12 +697,99 @@ def Get_DataFrame_to_CSV(raw_txt, af_txt):
     df.to_csv('output.csv', index=False, encoding='utf-8-sig')  # 윈도우에서 한글 포함 시 utf-8-sig 권장
 
 
+def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
+    for i in range(df.shape[0]):
+        row = df.iloc[i]
+        Atext = int(str(row['AcuteInfarction']).strip())
+        redf.loc[i, 'class'] = Atext
+
+
+# '##', '-'로 토큰이 분리된 용어를 재결합.
+def merge_wordpieces(tokens : list):
+    words = []
+    current_word = ''
+    for token in tokens:
+        if token.startswith('##'):
+            current_word += token[2:]
+        elif token.startswith('-'):
+            current_word += token
+        elif current_word and current_word[-1] == '-':
+            current_word += token
+        else:
+            if current_word:
+                words.append(current_word)
+            current_word = token
+    if current_word:
+        words.append(current_word)
+    return words
+
+
+# 불용어(and, the, 그, at 등) 제거 및 영문+한글('edema로', 'CTA를') 조합에서 불필요한 한글 제거.
+def reorg_wordpieces(tokens : list):
+    filtered_words = [tk.lower() for tk in tokens if tk.lower() not in stopwords]
+    for idx, token in enumerate(filtered_words):
+        if re.search(r'[가-힣]', token) and re.search(r'[a-zA-Z-]', token):
+            token = re.sub(r'[^a-zA-Z-]', '', token)    # 영어 + 한글 조합의 토큰에서 한글 제거
+            filtered_words[idx] = token
+
+        # 한글 표현에서 "[단어]의" 형태로 토큰화될 수 있는 표현 전처리
+        if re.search(r'[가-힣]+의$', token) :
+            token = re.sub(r'([가-힣]+)의', r'\1', token)
+
+        # 대/소문자 구분되는 특정 단어의 정형화
+        if token == 'rt':
+            token = 'right'
+        elif token == 'lt':
+            token = 'left'
+        elif re.search(r'소견[a-zA-Z가-힣]', token):
+            token = '소견'
+        elif token == '근위내경돔갱':        #오타 정정
+            token = '근위내경동맥'
+        filtered_words[idx] = token
+    return filtered_words
+
+
+def sent_tokenizing(df : pd.DataFrame):
+    MAX_LEN = 512
+    sentences_list = []
+
+    # Findings, Conclusion Tokenizing
+    for idx, sents in enumerate(zip(df.finding, df.conclusion)):
+        # tokenizer2 = BertTokenizer.from_pretrained('bert-base-cased', do_lower_case=False)
+        sentences = sents[0] + sents[1]
+        sentences_list.append(sentences)        # Findings + Conclusion 텍스트 데이터를 하나의 문자열로 저장.
+
+    #print(sentences_list)
+    # tokenized_sentences = []
+    # for s in sentences_list :
+    #     t = tokenizer_bert.tokenize(s)
+    #     tokenized_sentences.append(t[:MAX_LEN])
+
+    # 단어 토큰에 고유한 인덱스 번호를 부여하고, 패딩을 첨가해 시퀀스 생성.
+    #input_ids = [tokenizer_bert.convert_tokens_to_ids(x) for x in tokenized_sentences]
+    #input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="pre", padding="pre")
+
+        # bert_sentences = '[CLS] '
+        # for s in sentences :
+        #     bert_sentences += s + ' [SEP] '
+    #print(input_ids)
+        #token_test = word_tokenize(Ctext)
+        # token_test = tokenizer.tokenize(Ctext)          # 전처리한 소견을 토큰화
+        # token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
+        # token_test = reorg_wordpieces(token_test)       # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
+        # token_list.append(token_test)
+
+
+
+
 if __name__ == '__main__':
-    # Raw Dataset, DataFrame.
+
+    ## 1.Raw Dataset, Raw DataFrame, Preprocessed DataFrame
     kiumSet = pd.read_csv(r'.\TrainCopySet.csv')
     df = pd.DataFrame(kiumSet)
+    pre_df = pd.DataFrame(columns=['finding', 'conclusion', 'class'])
 
-    # 1. Show Raw DataSet(DataFrame) Information.
+    ## 2. Show Raw DataSet(DataFrame) Information.
     show_info(df)
     """
     <class 'pandas.core.frame.DataFrame'>
@@ -697,19 +804,27 @@ if __name__ == '__main__':
     memory usage: 145.2+ KB
     """
 
-    # 2. Missing Value Handling
+    ## 3.Missing Value Handling
     empty_to_missing(df)
 
-
-    # 3. 'Findings' Sentence Preprocessing
-    #raw_find, after_find = Findings_Preprocessing(df)
+    ## 4.'Findings' Sentence Preprocessing
+    raw_find, after_find = Findings_Preprocessing(df, pre_df)
 
 
     # 번외. 테스트 목적의 데이터프레임 csv 추출.
     #Get_DataFrame_to_CSV(raw_find, after_find)
 
 
-    # 4. 'Conclusion' Sentence Preprocessing
-    raw_find, after_find, token_list = Conclusion_Preprocessing(df)
+    ## 5.'Conclusion' Sentence Preprocessing
+    #raw_conc, after_conc = Conclusion_Preprocessing(df, pre_df)
 
-    Get_DataFrame_to_CSV(raw_find, after_find)
+    #Get_DataFrame_to_CSV(raw_conc, after_conc)
+
+    ## 6.Classification ('AcuteInfarction' Preprocessing)
+    Acute_Classification(df, pre_df)
+
+    ## 7.DataSet Tokenization
+    #sent_tokenizing(pre_df)
+
+
+    #print(pre_df[0:30]['conclusion'])
