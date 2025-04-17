@@ -12,7 +12,7 @@ from transformers import BertTokenizer
 #from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
 tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 stopwords = ('and', 'at', 'a', 'an', 'as', 'in', 'to', 'the', 'of', 'or',
-             '가', '이', '과', '그', '볼', '수', '의', '을', '인해', '및', '년', '또는', '그리고', '에', '현')
+             '가', '이', '과', '그', '등의', '볼', '수', '의', '을', '인해', '및', '년', '또는', '그리고', '에', '현')
 
 def show_info(df: pd.DataFrame):
     """
@@ -58,6 +58,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
+        if not  22 <= i < 31 : continue
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', '')
@@ -65,13 +66,15 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
 
         ##  1. Findings에 포함된 주요 의학 용어 정형화.
         #   분류 기준이 아닌 소견 내용 구분 목적의 텍스트이므로 삭제.
-        Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|CI\,', '', Ftext)
-        Ftext = re.sub(r'[sS]\/[pP]', ' status-post ', Ftext)
-        Ftext = re.sub(r'[rR][/][oO]', ' rule-out ', Ftext)
-        Ftext = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up', ' follow-up ', Ftext)
+        Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|CI\,', '', Ftext)             # Clinical information, CI:, CI,
+        Ftext = re.sub(r'[sS]\/[pP]', ' status-post ', Ftext)                               # s/p, S/P
+        Ftext = re.sub(r'[rR][/][oO]', ' rule-out ', Ftext)                                 # r/o, R/O
+        Ftext = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up', ' follow-up ', Ftext)         # f/u, f-u, f.u
+        Ftext = re.sub(r'[tT]2\*', r' t2-star ', Ftext)                                     # T2*
         Ftext = re.sub(
             r'[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]onspecific'
             ,' non-specific ', Ftext)
+        Ftext = re.sub(r'\s*\-?\s*[Dd][Dd][xX].?', ' ', Ftext)
 
         ## 2. 양성과 음성을 구분하는 문자를 명확한 단어로 변경한다.
         ## (+) --> positive, (-) --> negative
@@ -81,10 +84,63 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         if '(-)' in Ftext:
             Ftext = re.sub(r'\(\-\)', 'negative', Ftext)
 
+        # aneurysm의 4차원 값 표현 구분
+        # Length + Width + Height(Depth) + Neck
+        matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*(mm|cm)', Ftext)
+        print(matches)
+        if matches :
+            for grplist in matches :
+                if grplist[-1] == 'mm' :
+                    # Length 정형화
+                    if '.' in grplist[0]:
+                        Ltmp = str(int(round(float(grplist[0]))))
+                        Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+                    else:
+                        Ltmp, Lvalue = grplist[0], grplist[0]
+
+                    # Width 정형화
+                    if '.' in grplist[2]:
+                        Wtmp = str(int(round(float(grplist[2]))))
+                        Wvalue = re.sub(r'\.', r'\\.', grplist[2])
+                    else:
+                        Wtmp, Wvalue = grplist[2], grplist[2]
+
+                    # Height 정형화
+                    if '.' in grplist[4]:
+                        Htmp = str(int(round(float(grplist[4]))))
+                        Hvalue = re.sub(r'\.', r'\\.', grplist[4])
+                    else:
+                        Htmp, Hvalue = grplist[4], grplist[4]
+
+                    # Neck 정형화
+                    if '.' in grplist[6]:
+                        Ntmp = str(int(round(float(grplist[6]))))
+                        Nvalue = re.sub(r'\.', r'\\.', grplist[6])
+                    else:
+                        Ntmp, Nvalue = grplist[6], grplist[6]
+
+                    Ftext = re.sub(fr'{Lvalue}\s*(x|X|\*)(?=\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*mm)'
+                                   , fr' Length-{Ltmp}mm '
+                                   , Ftext)
+
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm)\s*{Wvalue}\s*(x|X|\*)(?=\s*(\d(?:\.\d{1, 2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1, 2})?)\s*\(neck\)\s*mm)'
+                                   , fr' Width-{Wtmp}mm '
+                                   , Ftext)
+
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm Width\-{Wtmp}mm)\s*{Hvalue}\s*(x|X|\*)(?=\s*(\d(?:\.\d{1, 2})?)\s*\(neck\)\s*mm)'
+                                   , fr' Height-{Htmp}mm '
+                                   , Ftext)
+
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm Width-{Wtmp}mm Height-{Htmp}mm)\s*{Nvalue}\s*\(neck\)\s*mm'
+                                   , fr' Neck-{Ntmp}mm '
+                                   , Ftext)
+
+        print(raw_data)
+        print(Ftext)
+
         # 3차원 크기 데이터 정형화
         matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\(neck\))?\s*(cm|mm)',Ftext)
         if matches:
-            print(matches)
             for grplist in matches:  # 매칭된 그룹 리스트 순환. 6개의 원소가 하나의 그릅에 포함.
                 if grplist[-1] == 'cm':  # cm 단위라면 mm 단위로 변환 (cm 단위는 소수점이 포함되지만, mm 단위는 정수만으로 표현 가능).
                     Ltmp = str(int(float(grplist[0]) * 10))  # 정형화 값으로 사용할 mm단위의 L,W,H 값.
@@ -143,117 +199,92 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                     Htmp, Hvalue = grplist[4], grplist[4]
 
                 # Length 정형화
-                Ftext = re.sub(
-                        fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
-                        fr' Length-{Ltmp}mm ',
-                        Ftext)
+                Ftext = re.sub(fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
+                               , fr' Length-{Ltmp}mm '
+                               , Ftext)
 
                 # Width 정형화
-                Ftext = re.sub(fr'(?<=Length {Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)',
-                                   fr' Width-{Wtmp}mm ',
-                                   Ftext)
+                Ftext = re.sub(fr'(?<=Length {Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
+                               , fr' Width-{Wtmp}mm '
+                               , Ftext)
 
                 # Height 정형화
-                Ftext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm).+{Hvalue}' + r'\s*\-{1,4}\>?',
-                                   fr' Height-{Htmp}mm change ',
-                                   Ftext)
+                Ftext = re.sub(fr'(?<=Length {Ltmp}mm Width {Wtmp}mm).+{Hvalue}' + r'\s*\-{1,4}\>?'
+                               , fr' Height-{Htmp}mm change '
+                               , Ftext)
             # print(matches)
             # print(Ctext)
 
-        ##  3. 크기가 변경되는 데이터를 증가(increase) 또는 감소(decrease)로 변경한다.
-        #   하나의 의미로 통합하기 위해 특수 문자를 포함한 크기 값의 텍스트를 변경함.
-        #   ex) 18mm --> 24mm   = increase
-        #   ex) 18 mm --> 9 mm  = decrease
-        #   '-->'를 기준으로 이전 값과 이후 값을 추출하여 비교한다.
-        bef_matches = re.findall(r'(\d+(\.\d+)?)(?=\s*(m|c)m\.?\s*\-+>\s*\d+(\.\d+)?\s*(m|c)m)\.?', Ftext)   # 이전 크기 추출
-        # if bef_matches :
-        #     print(Ftext)
-        #     print(bef_matches)
+            # 2차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
+            # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
+            matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)(?:cm|mm)?\s*(\-{1,4}\>*)', Ftext)
+            if matches:
+                for grplist in matches:
+                    if '.' in grplist[0]:
+                        Ltmp = str(int(float(grplist[0]) * 10))
+                        Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+                    else:
+                        Ltmp, Lvalue = grplist[0], grplist[0]
 
-        af_matches = re.findall(r'(?:\-+>)\s*(\d+(\.\d+)?)(?=\s*(m|c)m\.?)', Ftext) # 이후 크기 추출
-        # if af_matches :
-        #     print(f"After Test\n{Ftext}")
-        #     print(af_matches)
+                    if '.' in grplist[2]:
+                        Wtmp = str(int(float(grplist[2]) * 10))
+                        Wvalue = re.sub(r'\.', r'\\.', grplist[2])
+                    else:
+                        Wtmp, Wvalue = grplist[2], grplist[2]
 
-        size_matches = tuple()
-        for i in range(len(bef_matches)) :
-            bef = bef_matches[i][0]
-            af  = af_matches[i][0]
-            sent = ""
-            #print(f"text bef and af = {bef}, {af}")
+                    # Length 정형화
+                    Ftext = re.sub(fr'([^1-9]|^|\(){Lvalue}' + r'(?=\s*(x|\*|X)\s*\d{1,2}(\.\d{1,2})?(cm|mm)?\s*\-{1,4}\>*)'
+                                   , fr' Length-{Ltmp}mm '
+                                   , Ftext)
 
-            # 크기 변경 정도에 따라 decrease, increase, NoChange 구분.
-            if float(bef) > float(af) :
-                sent = "decrease"
-            elif float(bef) < float(af) :
-                sent = "increase"
-            elif float(bef) == float(af) :
-                sent = "NoChange"
+                    # Width 정형화
+                    Ftext = re.sub(fr'(?<=Length {Ltmp}mm ).+{Wvalue}(cm|mm)?' + r'\s*\-{1,4}\>*'
+                                   , fr'Width-{Wtmp}mm change '
+                                   , Ftext)
+                    # print(matches)
+                    # print(Ctext)
 
-            #print(Ftext)
-            # 전체 문자열을 'decrease|increase|NoChange' 중 하나로 변경.
-            Ftext = re.sub(str(bef)+r'(\.\d+)?\s*(m|c)m\.?\s*\-+>\s*'+str(af)+r'(\.\d+)?\s*(m|c)m\.?', sent, Ftext)
-            #print(Ftext)
 
         ##  4. 날짜 기록 데이터 (2011.07.08.), (2011. 11. 11.), (2004) 전체 삭제.
         #   날짜 데이터는 '이전'의 의미를 전달할 뿐, 크게 의미 있지 않다고 판단하여 텍스트 삭제 진행.
         Ftext = re.sub(r'\(?\d{4}\.\d{1,2}\.\d{1,2}\.?\)?|'
                        r'\(\d{4}\)|'
-                       r'\(?\d{4}\.\s\d{1,2}\.\s\d{1,2}\.\)', '', Ftext)
+                       r'\(?\d{4}\.\s\d{1,2}\.\s\d{1,2}\.\)', ' ', Ftext)
 
-        ##  5. 특정 기호나 특수 문자 전체 삭제.
-        #   소견 내용을 읽기 쉽게 구분하는 문자( --, -, *, [ 등)는 결과 분류에 필요한 데이터가 아니므로 삭제(띄어쓰기로 텍스트 변환).
-        Ftext = re.sub(r'\-\-|\?\)?|\!|\:|\(?\*\)?|\s\-\s|\[', ' ', Ftext)
+        ##  x.특정 구분 텍스트 삭제 (DDX, Note 등)
+        Ftext = re.sub(r'\*\s*[nN]ote\s*[,:.]', ' ', Ftext)                 # * Note:
+        Ftext = re.sub(r'(?<=[a-zA-Z가-힣])\.(\s|$|\n|\t)', ' ', Ftext)   # 문장의 마지막 '.'
+        Ftext = re.sub(r'\d\.\s', ' ', Ftext)                               # 1., 2., 3.,
+        Ftext = re.sub(r'(?<=\w)[`\']s\s', ' ', Ftext)                      # Parkinson's
 
-
-        ##  6. 순서 번호, 구분 기호를 의미하는 특수 문자 제거.
-        #   ex) '1.', '2.', '(1)', '(2)', ' - ', '->, -->', '→', '1)', '[1]', ';' 등
-        #   특정 기호들의 조합, 숫자/문자를 결합한 표현은 명확하게 구분하여 제거할 수 있도록 정규표현식 작성에 주의.
-        #print(f"Before Text\n{Ftext}")
-        Ftext = re.sub(r'([^\W\d_])>|'
-                    r'(?<=MRV)\s*>|'
-                    r'\s*\-+>|'
-                    r'\s*\=+>|'
-                    r'\*>|'
-                    r'<[a-zA-Z가-힣]|'
-                    r'<\-{1,2}|'
-                    r';|'
-                    r'\d\.(?!\d)\)?|'
-                    r'\(\d\)(\:|\.|\,)?|'
-                    r'\[\d\]|'
-                    r'(\s)\(\*\,|'
-                    r'(\s)\.\s|'
-                    r'(?<=\w)\.\)?\,|'
-                    r'(?<=\w|\))(\]|\))[,.]|'
-                    r'(?<=\w)\s{0,1}\,\.?|'
-                    r'(?<=[가-힣a-zA-Z])\s?\.{1,2}\)?|'
-                    r'\((?=\s{0,1}\w|\<|\>|\#|\=)|'
-                    r'(?<=\w|\%)\)|'
-                    r'(?<=\w)\]'
-                    , r'\1', Ftext, flags=re.VERBOSE)
-            #print(f"End conv\n{Ftext}")
 
 
         ##  7. 대소 비교 문자('<', '>') 텍스트 변환.
         #   '<', '>'는 다른 특수 문자와 조합하여 '구분 문자' 역할로 사용하는 경우도 있다.
         #   이를 제외(삭제)하면 크기나 백분율 비교로 사용하므로 이들에 대한 명확한 텍스트 변환이 필요하다.
         #   대소 구분 목적으로 사용하는 기호 표현을 'less than', 'greater than'으로 텍스트 변경한다.
-        Ftext = re.sub(r'>\s(?=right|left|Lt|Rt|\d|Grade)|greater than', ' greater-than ', Ftext)
-        Ftext = re.sub(r'<\s(?=right|left|Lt|Rt|\d|Grade)|less than', ' less-than ', Ftext)
+        Ftext = re.sub(r'[lL]t\s', ' left ', Ftext)
+        Ftext = re.sub(r'[rR]t\s', ' right ', Ftext)
+        Ftext = re.sub(r'>\s*(?=right|left|\d|Grade)|greater than', ' greater-than ', Ftext)
+        Ftext = re.sub(r'<\s*(?=right|left|\d|Grade)|less than', ' less-than ', Ftext)
+        Ftext = re.sub(r'<(?=[a-zA-Z가-힣])|(?<=[a-zA-Z가-힣])>', ' ', Ftext)                                   # <Brain, dings>
+        Ftext = re.sub(r'(?<=[a-zA-Z가-힣])\s*[,:;]', ' ', Ftext)                                    # DWI,
         # Ftext = re.sub(r'<', 'less than', Ftext)
+
+        ## x. 구분자 역할의 특수문자 제거
+        Ftext = re.sub(r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
+                       r'\-+>', ' ', Ftext)
+
 
         ## 8. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
         #print(f"Start conv\n{Ftext}")
         Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
+        # print('##############################################')
+        # print(raw_data)
+        # print(Ftext)
+        # print('##############################################')
 
         # matches = re.findall(r'\.|\,', Ctext)
-        matches = re.findall(r'(cm|mm)', raw_data)
-        if matches:
-            print("##########################################")
-            print(raw_data)
-            print(f"Need to Replace\n{Ftext}")
-            print()
-            print("##########################################")
         # cnt += 1
         # if cnt == 30 : break
 
