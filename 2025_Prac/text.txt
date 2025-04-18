@@ -32,3 +32,7 @@ print("복원된 문장:", masked)
  F/I = Further Investigation
  (CE) = Contrast Enhancement
  T2* = T2-star (T2-star weighted imaging)
+ Cerebral, Cerebrum = 대뇌
+ Cerebellum = 소뇌
+
+ 대뇌의 4개(Parietal, Temporal, Occipital, Frontal)의 엽(Lobe) 분류 용어에 대한 정형화.
