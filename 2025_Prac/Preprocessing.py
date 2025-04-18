@@ -12,7 +12,7 @@ from transformers import BertTokenizer
 #from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
 tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 stopwords = ('and', 'at', 'a', 'an', 'as', 'in', 'to', 'the', 'of', 'or',
-             '가', '이', '과', '그', '등의', '볼', '수', '의', '을', '인해', '및', '년', '또는', '그리고', '에', '현')
+             '가', '이', '과', '그', '등의', '볼', '수', '의', '외', '을', '인해', '및', '년', '또는', '그리고', '에', '현')
 
 def show_info(df: pd.DataFrame):
     """
@@ -58,7 +58,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
-        if not  22 <= i < 31 : continue
+        if not  61 <= i < 71 : continue
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', '')
@@ -75,6 +75,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
             r'[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]onspecific'
             ,' non-specific ', Ftext)
         Ftext = re.sub(r'\s*\-?\s*[Dd][Dd][xX].?', ' ', Ftext)
+        Ftext = re.sub(r'[dD][/][tT]|due to', ' due-to ', Ftext)
 
         ## 2. 양성과 음성을 구분하는 문자를 명확한 단어로 변경한다.
         ## (+) --> positive, (-) --> negative
@@ -87,7 +88,6 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         # aneurysm의 4차원 값 표현 구분
         # Length + Width + Height(Depth) + Neck
         matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*(mm|cm)', Ftext)
-        print(matches)
         if matches :
             for grplist in matches :
                 if grplist[-1] == 'mm' :
@@ -119,15 +119,15 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                     else:
                         Ntmp, Nvalue = grplist[6], grplist[6]
 
-                    Ftext = re.sub(fr'{Lvalue}\s*(x|X|\*)(?=\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*mm)'
+                    Ftext = re.sub(fr'{Lvalue}\s*(x|X|\*)(?=\s*{Wvalue}\s*(x|X|\*)\s*{Hvalue}\s*(x|X|\*)\s*{Nvalue}\s*\(neck\)\s*mm)'
                                    , fr' Length-{Ltmp}mm '
                                    , Ftext)
 
-                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm)\s*{Wvalue}\s*(x|X|\*)(?=\s*(\d(?:\.\d{1, 2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1, 2})?)\s*\(neck\)\s*mm)'
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm)\s*{Wvalue}\s*(x|X|\*)(?=\s*{Hvalue}\s*(x|X|\*)\s*{Nvalue}\s*\(neck\)\s*mm)'
                                    , fr' Width-{Wtmp}mm '
                                    , Ftext)
 
-                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm Width\-{Wtmp}mm)\s*{Hvalue}\s*(x|X|\*)(?=\s*(\d(?:\.\d{1, 2})?)\s*\(neck\)\s*mm)'
+                    Ftext = re.sub(fr'(?<=Length-{Ltmp}mm Width\-{Wtmp}mm)\s*{Hvalue}\s*(x|X|\*)(?=\s*{Nvalue}\s*\(neck\)\s*mm)'
                                    , fr' Height-{Htmp}mm '
                                    , Ftext)
 
@@ -135,8 +135,6 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                                    , fr' Neck-{Ntmp}mm '
                                    , Ftext)
 
-        print(raw_data)
-        print(Ftext)
 
         # 3차원 크기 데이터 정형화
         matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\(neck\))?\s*(cm|mm)',Ftext)
@@ -275,14 +273,18 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ftext = re.sub(r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
                        r'\-+>', ' ', Ftext)
 
+        token_test = tokenizer_bert.tokenize(Ftext)  # 전처리한 소견을 토큰화
+        token_test = merge_wordpieces(token_test)  # 토큰 데이터를 재결합
+        token_test = reorg_wordpieces(token_test)  # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
         ## 8. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
         #print(f"Start conv\n{Ftext}")
         Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
-        # print('##############################################')
-        # print(raw_data)
-        # print(Ftext)
-        # print('##############################################')
+        print('##############################################')
+        print(raw_data)
+        print(Ftext)
+        print(token_test)
+        print('##############################################')
 
         # matches = re.findall(r'\.|\,', Ctext)
         # cnt += 1
@@ -847,9 +849,11 @@ def reorg_wordpieces(tokens : list):
             token = re.sub(r'[^a-zA-Z-]', '', token)    # 영어 + 한글 조합의 토큰에서 한글 제거
             filtered_words[idx] = token
 
-        # 한글 표현에서 "[단어]의" 형태로 토큰화될 수 있는 표현 전처리
-        if re.search(r'[가-힣]+의$', token) :
-            token = re.sub(r'([가-힣]+)의', r'\1', token)
+        # 한글 표현에서 "[용어]의", "[용어]로" 등의 형태로 토큰화될 수 있는 표현 전처리
+        if re.search(r'[가-힣]+[의에은을]$', token):
+            token = re.sub(r'([가-힣]+)[의에은을]', r'\1', token)
+        elif re.search(r'[a-zA-Z]+[로에]$', token):
+            token = re.sub(r'([a-zA-Z]+)[로에은을]$', r'\1', token)
 
         # 대/소문자 구분되는 특정 단어의 정형화
         if token == 'rt':
