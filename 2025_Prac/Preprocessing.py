@@ -66,283 +66,294 @@ mask_matches = []
 def Mask_Repl(match : re.Match) -> str:
     """
     Replacement function used with 're.sub()' to mask text matched by 're.compile()'.
-    :param match:
+    :param match: matched text object of the regular expression.
     :return: token text(string) to replace the matched text.
     """
     token = f"__PROTECT{len(mask_matches)}__"
-    mask_matches.append((token, match.group(0)))  # 원문 저장
-    return token
+    mask_matches.append((token, match.group(0)))                # 정규표현식으로 매칭된 텍스트 원본과 변환(__PROTECT10__ 등)된 값을 저장.
+    return token                                                # 변환된 값이 문자열 원문에 반영될 수 있도록 변환 값 리턴.
 
 
 
 ## 대뇌의 4개(Parietal, Temporal, Occipital, Frontal)의 엽(Lobe) 분류 용어에 대한 정형화.
-def lobe_preprocessing(text : str):
+def lobe_preprocessing(text : str) -> str:
+    """
+    Convert the names of the four cerebral lobes into a single token format.
+    @Frontal lobe = 전두엽(운동, 판단, 언어)
+    @Parietal lobe = 두정엽(공간 지각, 감각 정보)
+    @Temporal lobe = 측두엽(청각, 기억)
+    @Occipital lobe = 후두엽(시각 처리)
+    :param text: Medical impression string data (Findings, Conclusion).
+    :return: Converted string data.
+    """
     #  both, bilateral 'parietal' + 'temporal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|occipital)[ &,-]*(temporal|parietal|occipital)[ &,-]*(temporal|parietal|occipital)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
-                  r'(at )?(the )?([Bb]ilateral|[bB]oth|양측) (parieto|temporo|occipito)[ -]*(parieto|temporo|occipito)[ -]*(occipital|temporal|parietal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))'
-                   , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe left-temporal-lobe left-parietal-lobe left-occipital-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|occipital)[ &,-]*(temporal|parietal|occipital)(\,|\s|\&|and|\-)*(temporal|parietal|occipital)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+                  r'(at )?(the )?([Bb]ilateral|[bB]oth|양측) (parieto|temporo|occipito)[ \-,]*(parieto|temporo|occipito)[ \-,]*(occipital|temporal|parietal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=fronto)))'
+                  , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe left-temporal-lobe left-parietal-lobe left-occipital-lobe '
+                  , text)
     #  both, bilateral 'frontal' + 'parietal' + 'temporal'
     text = re.sub(r'[Bb]oth\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
-                   r'(at )?the.*?([Bb]ilateral|[Bb]oth|양측).*frontal parietal temporal lobe(s)?|'
-                  r'(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|frontal)[ &,]*(temporal|parietal|frontal)[ &,및]*(temporal|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right|[lL]t|[rR]t))'
-                   , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe right-temporal-lobe right-parietal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?the.*?([Bb]ilateral|[Bb]oth|양측).*frontal parietal temporal lobe(s)?|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|frontal)[ &,]*(temporal|parietal|frontal)(\,|\s|\&|and|\-|및)*(temporal|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right|[lL]t|[rR]t))|'
+                  r'(at )?(the)?([Bb]ilateral|[Bb]oth|양측) (fronto|parieto|temporo)[ ,\-]*(fronto|parieto|temporo)[ ,\-]*(frontal|parietal|temporal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=occipit)))'
+                  , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe right-temporal-lobe right-parietal-lobe right-frontal-lobe '
+                  , text)
     #  both, bilateral 'frontal' + 'parietal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal|frontal)[ &,]*(occipital|parietal|frontal)[ &,]*(occipital|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))'
-                   , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe right-occipital-lobe right-parietal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal|frontal)[ &,]*(occipital|parietal|frontal)(\,|\s|\&|and|\-)*(occipital|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (fronto|parieto|occipito)[ ,\-&]*(fronto|parieto|occipito)[ ,\-&]*(occipital|parietal|frontal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=tempor)))'
+                  , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe right-occipital-lobe right-parietal-lobe right-frontal-lobe '
+                  , text)
     #  both, bilateral 'frontal' + 'temporal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|temporal|frontal)[ &,]*(occipital|temporal|frontal)[ &,]*(occipital|temporal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))'
-                   , ' left-occipital-lobe left-temporal-lobe left-frontal-lobe right-occipital-lobe right-temporal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|temporal|frontal)[ &,]*(occipital|temporal|frontal)(\,|\s|\&|and|\-)*(occipital|temporal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (fronto|temporo|occipito)[ &,\-]*(fronto|temporo|occipito)[ &,\-]*(frontal|temporal|occipital)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=pariet)))'
+                  , ' left-occipital-lobe left-temporal-lobe left-frontal-lobe right-occipital-lobe right-temporal-lobe right-frontal-lobe '
+                  , text)
 
     #  both 'parietal' + 'temporal'
     text = re.sub(r'[Bb]oth\s*[PT]\-[PT]s*(lobe(s)?)?|both parieto-temporo-parietal lobe(s)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal)(\.|\,|and|\s|\&)*(temporal|parietal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))'
-                   , ' right-temporal-lobe right-parietal-lobe left-temporal-lobe left-parietal-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal)(\.|\,|and|\s|\&)*(temporal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))|'
+                  r'(at )?(the )?([Bb]ilateral|[bB]oth|양측) (parieto|temporo)[\- ,]*(parietal|temporal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))'
+                  , ' right-temporal-lobe right-parietal-lobe left-temporal-lobe left-parietal-lobe '
+                  , text)
     #  both 'parietal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[PO]\-[PO]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal)(\.|\,|and|\s|\&)*(occipital|parietal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
-                   r'(at )?(the )?([Bb]ilateral|[bB]oth) (parieto|occipito)[\- ,]*(occipital|parietal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occipital|parietal)))'
-                   , ' right-occipital-lobe right-parietal-lobe left-occipital-lobe left-parietal-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal|parieto|occipito)(\.|\,|and|\s|\&|\-)*(occipital|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|front)))'
+                  , ' right-occipital-lobe right-parietal-lobe left-occipital-lobe left-parietal-lobe '
+                  , text)
     #  both 'parietal' + 'frontal'
     text = re.sub(r'([Bb]oth|the [Bb]ilateral)\s*[PF]\-[PF]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (frontal|parietal)(\.|\,|and|\s|\&)*(frontal|parietal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occip|temporal)))|'
-                   r'(at )?([Tt]he )?([Bb]oth|bilateral) fronto(-)?parietal\s*(lobe(s)?)?((\.|\,|and|\s)*(?=[rR]ight|[lL]eft))?'
-                   , ' right-parietal-lobe right-frontal-lobe left-parietal-lobe left-frontal-lobe '
-                   , text)
+                  r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|parietal|fronto|parieto)(\.|\,|and|\s|\&|\-)*(frontal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|occipit)))'
+                  , ' right-parietal-lobe right-frontal-lobe left-parietal-lobe left-frontal-lobe '
+                  , text)
     #  both 'temporal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[TO]\-[TO]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|occipital)(\.|\,|and|\s|\&)*(temporal|occipital) lobe(s)?'
-                   , ' right-temporal-lobe right-occipital-lobe left-temporal-lobe left-occipital-lobe '
-                   , text)
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|temporo|occipital|occipito)(\.|\,|and|\s|\&|\-)*(temporal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=pariet|front)))'
+                  , ' right-temporal-lobe right-occipital-lobe left-temporal-lobe left-occipital-lobe '
+                  , text)
     #  both 'temporal' + 'frontal'
     text = re.sub(r'[Bb]oth\s*[TF]\-[TF]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (frontal|temporal)(\.|\,|and|\s|\-|\&)*(frontal|temporal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occipital|parietal)))|'
-                   r'(at )?([Tt]he )?([Bb]oth|[Bb]ilateral) (fronto|frontal|temporo)[ \-,]*(temporal|frontal) lobe(s)?\s(and (?=[rR]ight|[lL]eft))?'
-                   , ' right-temporal-lobe right-frontal-lobe left-temporal-lobe left-frontal-lobe '
-                   , text)
+                  r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|fronto|temporal|temporo)(\.|\,|and|\s|\-|\&)*(frontal|temporal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|occipit)))'
+                  , ' right-temporal-lobe right-frontal-lobe left-temporal-lobe left-frontal-lobe '
+                  , text)
     #  both 'occipital' + 'frontal'
     text = re.sub(r'[Bb]oth\s*[OF]\-[OF]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (frontal|occipital)[ &,]*(frontal|occipital) lobe(s)?'
-                   , ' right-occipital-lobe right-frontal-lobe left-occipital-lobe left-frontal-lobe '
-                   , text)
+                  r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|fronto|occipital|occipito)(\.|\,|and|\s|\-|\&)*(frontal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|tempor)))'
+                  , ' right-occipital-lobe right-frontal-lobe left-occipital-lobe left-frontal-lobe '
+                  , text)
 
     #  both 'parietal'
-    text = re.sub(r'[Bb]oth P[ ,)]lobe(s)?|(the )?([Bb]ilateral|[Bb]oth) parietal lobe(s)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (parietal|paretal)[ ,&]\s*(?!=(frontal|occipital|temporal))'
-                   , ' right-parietal-lobe left-parietal-lobe '
-                   , text)
+    text = re.sub(r'[Bb]oth P[ ,)]lobe(s)?|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) par(i)?etal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|tempor)))'
+                  , ' right-parietal-lobe left-parietal-lobe '
+                  , text)
     #  both 'temporal'
-    text = re.sub(r'[Bb]oth T[ ,)]lobe(s)?|(the )?([Bb]ilateral|[Bb]oth) temporal lobe(s)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) temporal[ ,&]\s*(?!=(frontal|occipital|parietal))'
-                   , ' right-temporal-lobe left-temporal-lobe '
-                   , text)
+    text = re.sub(r'[Bb]oth T[ ,)]lobe(s)?|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) temporal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|pariet)))'
+                  , ' right-temporal-lobe left-temporal-lobe '
+                  , text)
     #  both 'occipital'
-    text = re.sub(r'[Bb]oth O[ ,)]lobe(s)?|(the )?([Bb]ilateral|[Bb]oth) occipital lobe(s)?|'
-                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) occip(i)?tal[ ,&]\s*(?!=(frontal|parietal|temporal))'
-                   , ' right-occipital-lobe left-occipital-lobe '
-                   , text)
+    text = re.sub(r'[Bb]oth O[ ,)]lobe(s)?|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) occip(i)?tal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|tempor|pariet)))'
+                  , ' right-occipital-lobe left-occipital-lobe '
+                  , text)
     #  both 'frontal'
-    text = re.sub(r'[Bb]oth F[ ,)]lobe(s)?|(the )?([Bb]ilateral|[Bb]oth) frontal lobe(s)?|'
-                   r'(the )?([Bb]ilateral|[Bb]oth|양측) frontal[ ,&]\s*(?!=(temporal|occipital|parietal))'
-                   , ' right-frontal-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'[Bb]oth F[ ,)]lobe(s)?|'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) frontal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(occipit|tempor|pariet)))'
+                  , ' right-frontal-lobe left-frontal-lobe '
+                  , text)
 
     #  both 'cerebellum' + 'cerebrum'
-    text = re.sub(r'(at )?(the )?([Bb]ilateral|[Bb]oth) (cerebral|cerebellar)( |and|\&|\-)*(cerebral|cerebellar)'
+    text = re.sub(r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (cerebral|cerebellar)( |and|\&|\-)*(cerebral|cerebellar)'
                   , r' right-cerebellum right-cerebrum left-cerebellum left-cerebrum '
                   , text)
     #  both 'cerebral' or 'cerebrum'
-    text = re.sub(r'(the )?([Bb]oth|[Bb]ilateral|bialteral) ([Cc]erebral|[Cc]erebrum)', ' right-cerebrum left-cerebrum ', text)
+    text = re.sub(r'(at )?(the )?([Bb]oth|[Bb]ilateral|bialteral|양측)\s*([Cc]erebral|[Cc]erebrum)'
+                  , ' right-cerebrum left-cerebrum '
+                  , text)
     #  both 'cerebellum'
-    text = re.sub(r'(the )?([Bb]oth|[Bb]ilateral|bialteral)\s*[Cc]erebellum', 'right-cerebellum left-cerebellum', text)
+    text = re.sub(r'(at )?(the )?([Bb]oth|[Bb]ilateral|bialteral|양측)\s*[Cc]erebellum'
+                  , ' right-cerebellum left-cerebellum '
+                  , text)
 
 
 
-    #  right 전 항목(이례적)
-    text = re.sub(r'([rR]ight|[rR]t) frontal[ ,]*parietal[ ,]*temporal[ ,]*occipital[ ,]*'
+    #  right 4개 항목
+    text = re.sub(r'(at )?(the )?([rR]ight|[rR]t\.?) (frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)( |\,|and)*(frontal|parietal|temporal|occipital)[ ,]*(lobe|area)s?'
                   , r' right-temporal-lobe right-parietal-lobe right-occipital-lobe right-frontal-lobe '
                   , text)
+
     #  right 'parietal' + 'temporal' + 'occipital'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (parietal|temporal|occipital)[, &-]*(parietal|temporal|occipital)(\,|\s|\&|and|\-)*(parietal|temporal|occ(i)?pital) lobe(s)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(temporo|parieto|occipito)[, &-]*(temporo|parieto|occipito)[, &-]*(occipital|temporal|parietal)(\,|\s|\&|and|\-)*((lobe|area)(s)?\.?|(?=right|left)|(?!=frontal))'
-                   , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occ(i)?pit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front))'
+                  , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe '
+                  , text)
     #  right 'parietal' + 'temporal' + 'frontal'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t) (parietal|temporal|frontal)[, &]*(parietal|temporal|frontal)(\,|\s|\&|and)*(parietal|temporal|frontal) lobe(s)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t) (fronto|temporo)[ \-,]*(temporo|fronto|temporal)(\,|\s|\&|and|\-)*(parietal|parieto)(lobe(s)?|(?=(left|right)))?'
-                   , ' right-temporal-lobe right-parietal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|front)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit))'
+                  , ' right-temporal-lobe right-parietal-lobe right-frontal-lobe '
+                  , text)
     #  right 'parietal' + 'occipital' + 'frontal'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (parietal|occipital|frontal)[, &]*(parietal|occipital|frontal)(\,|\s|\&|and)*(parietal|occipital|frontal) lobe(s)?'
-                   , ' right-occipital-lobe right-parietal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit|front)(al|o)[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor))'
+                  , ' right-occipital-lobe right-parietal-lobe right-frontal-lobe '
+                  , text)
     #  right 'temporal' + 'occipital' + 'frontal'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (temporal|occipital|frontal)[, &]*(temporal|occipital|frontal)(\,|\s|\&|and)*(temporal|occipital|frontal) lobe(s)?'
-                   , ' right-occipital-lobe right-temporal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=pariet))'
+                  , ' right-occipital-lobe right-temporal-lobe right-frontal-lobe '
+                  , text)
 
     #  right 'parietal' + 'temporal'
     text = re.sub(r'([Rr](i)?ght|[rR]t)\.?\s*[PT]\-[PT]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (parietal|temporal)[ &,]*(and )?(parietal|temporal)\s*(lobe(s)?|(?!=\,?(occipital|frontal)))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (parieto|parietal|temporo|temporal)[ -]*(temporal|parietal) lobe(s)?\.?'
-                   , ' right-temporal-lobe right-parietal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|front))'
+                  , ' right-temporal-lobe right-parietal-lobe '
+                  , text)
     #  right 'parietal' + 'occipital'
     text = re.sub(r'(right|[rR]t)\.?\s*[PO]\-[PO]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (parietal|occipital)[ &,]*(and )?(parietal|occipital)\s*(lobe(s)?|(?!=\,?(temporal|frontal)))|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(occipito|parieto)[ \-,&]*(occipital|paretal)\s*(area|lobe)s?'
-                   , ' right-occipital-lobe right-parietal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|front))'
+                  , ' right-occipital-lobe right-parietal-lobe '
+                  , text)
     #  right 'parietal' + 'frontal'
     text = re.sub(r'(right|[rR]t)\.?\s*[FP](\-|\, )[FP]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (frontal|parietal)(\,|\s|\&|and|\-)*(frontal|parietal)\s*(lobe(s)?|(?!=\,?(tempor|occipit)))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (parieto|fronto)[ \-,&]*(parietal|frontal)\s*(lobe(s)?|(\,|\s|\&|and)*(?!=\,?(occipit|tempor)))'
-                   , ' right-frontal-lobe right-parietal-lobe '
-                   , text)
+                  r'(at )?(the )?([rR]ight|[rR]t\.?) (front|pariet)(al|o)(\,|\s|\&|and|\-)*(front|pariet)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|occipit))'
+                  , ' right-frontal-lobe right-parietal-lobe '
+                  , text)
     #  right 'temporal' + 'occipital'
     text = re.sub(r'(right|[rR]t)\.?\s*[TO]\-[TO]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (temporal|occipital)(\,|\s|\&|and|\-)*(temporal|occipital)\s*(lobe(s)?|(?!=\,?(frontal|parietal)))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (temporo|occipito)[ -]*(occipital|temporal)\s*((area|lobe)(s)?|(?!=\,?(frontal|parietal)))'
-                   , ' right-temporal-lobe right-occipital-lobe '
-                   , text)
+                  r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front|pariet))'
+                  , ' right-temporal-lobe right-occipital-lobe '
+                  , text)
     #  right 'temporal' + 'frontal'
     text = re.sub(r'(right|[rR]t)\.?\s*[FT]\-[FT]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (temporal|frontal)(\,|\s|\&|and|\-)*(temporal|frontal)\s*(lobe(s)?|(?!=\,?(occipital|parietal)))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (temporo|fronto)[ \-,&]*(temporal|frontal)\s*(lobe(s)?|(\,|\s|\&|and)*(?!=\,?(occipital|parietal)))'
-                   , ' right-temporal-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|front)(al|o)(\,|\s|\&|and|\-)*(tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|pariet))'
+                  , ' right-temporal-lobe right-frontal-lobe '
+                  , text)
     #  right 'occipital' + 'frontal'
     text = re.sub(r'(right|[rR]t)\.?\s*[OF]\-[OF]s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Rr]ight|[rR]t\.?) (occipital|frontal)(\,|\s|\&|and|\-)*(occipital|frontal)\s*(lobe(s)?|(\,|\s|\&|and)*(?!=\,?(temporal|parietal)))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) (occipito|fronto)[ \-,&]*(temporal|frontal)\s*(lobe(s)?|(\,|\s|\&|and)*(?!=\,?(temporal|parietal)))'
-                   , ' right-occipital-lobe right-frontal-lobe '
-                   , text)
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (occipit|front)(al|o)(\,|\s|\&|and|\-)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|pariet))'
+                  , ' right-occipital-lobe right-frontal-lobe '
+                  , text)
 
     #  right 'parietal'
-    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) P[ ,).]|(at )?(the )?([Rr]ight|[rR][tT]\.?) parietal\s*lobe(s|에)?\.?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) pari(e)?tal[ &,]*(?!=(occipital|frontal|temporal))'
-                   , ' right-parietal-lobe '
-                   , text)
+    text = re.sub(r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) P[ ,).]|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) pari(e)?t(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(occipit|front|tempor)))'
+                  , ' right-parietal-lobe '
+                  , text)
     #  right 'temporal'
-    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) T[ ,).]|(at )?(the )?([Rr]ight|[rR][tT]\.?) temporal\s*lobe(s|에)?[.-]*|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) temporal[ &,]*(?!=(occipital|parietal|frontal))'
-                   , ' right-temporal-lobe '
-                   , text)
+    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) T[ ,).]|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) tempor(al|o)(\,|\s|\&|and|\-)*(lobe(s|에)?[.-]*|(?=left|both)|(?!=(occipit|front|pariet)))'
+                  , ' right-temporal-lobe '
+                  , text)
     #  right 'occipital'
-    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) O[ ,).]|(at )?(the )?([Rr]ight|[rR][tT]\.?) occipital\s*lobe(s|에)?\.?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) occipital[ &,]*(?!=(parietal|frontal|temporal))'
-                   , ' right-occipital-lobe '
-                   , text)
+    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) O[ ,).]|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) occipit(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(pariet|front|tempor)))'
+                  , ' right-occipital-lobe '
+                  , text)
     #  right 'frontal'
-    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) F[ ,).]|(at )?(the )?([Rr]ight|[rR][tT]\.?) frontal\s*lobe(s|에)?\.?|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) frontal[ &,]*(?!=(occipital|parietal|temporal))|'
-                   r'(at )?(the )?([rR]ight|[rR]t\.?) frontal(\s|\,|\&|and)*(?!=[lL]eft|[lL]t)'
-                   , ' right-frontal-lobe '
-                   , text)
+    text = re.sub(r'([rR][Tt]\.?|[Rr]ight) F[ ,).]|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=[Ll]eft|[lL]t|both)|(?!=(pariet|occipit|tempor)))'
+                  , ' right-frontal-lobe '
+                  , text)
     #  right 'cerebellum'
-    text = re.sub(r'(the )?([rR][Tt]\.?|[Rr]ight) ([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?', ' right-cerebellum ', text)
+    text = re.sub(r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) ([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?'
+                  , ' right-cerebellum '
+                  , text)
     #  right 'cerebrum'
-    text = re.sub(r'(the )?([rR][Tt]\.?|[Rr]ight) (cer(e)?bral|cerebrum)\.?', ' right-cerebrum ', text)
+    text = re.sub(r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) (cer(e)?bral|cerebrum)\.?'
+                  , ' right-cerebrum '
+                  , text)
 
 
-    #  left 전 항목(이례적)
-    text = re.sub(r'[lL]eft frontal[ ,]*parietal[ ,]*temporal[ ,]*occipital[ ,]*cerebellum[ ,]*'
+    #  left 4개 항목
+    text = re.sub(r'(at )?(the )?([lL]eft|[lL]t\.?) (frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)( |\,|and)*(frontal|parietal|temporal|occipital)[ ,]*(lobe|area)s?'
                   , r' left-temporal-lobe left-parietal-lobe left-occipital-lobe left-frontal-lobe left-cerebellum '
                   , text)
 
     #  left 'parietal' + 'temporal' + 'ocipital'
-    text = re.sub(r'(left|[lL]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (parietal|temporal|occipital)[, &]*(parietal|temporal|occipital)(\,|\s|\&|and)*(parietal|temporal|occipital) lobe(s)?|'
-                   r'(at )?(the )?([Ll]eft|[lL]t\.?) (parieto|parietal|temporo|temporal)[ \-,]*(temporal|parietal|parieto|temporo)[ \-,]*(occipital)(\,|\s|\&|and|\-)*(lobe(s)?|(?=([rR]ight|[lL]eft)))'
-                   , ' left-temporal-lobe left-parietal-lobe left-occipital-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=front))'
+                  , ' left-temporal-lobe left-parietal-lobe left-occipital-lobe '
+                  , text)
     #  left 'parietal' + 'temporal' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (parietal|temporal|frontal)[, &\-]*(parietal|temporal|frontal)(\,|\s|\&|and|\-)*(parietal|temporal|frontal)(\,|\s|\&|and|\-)*(lobe(s)?|(?=([rR]ight|[lL]eft))|(?!=occipit))'
-                   , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|front)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=occipit))'
+                  , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe '
+                  , text)
     #  left 'parietal' + 'occipital' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (parietal|occipital|frontal)(\s*\(prefrontal gyrus\))?[, &]*(parietal|occipital|frontal)(\,|\s|\&|and)*(parietal|occipital|frontal)(\,|\s|\&|and|\-)*(lobe(s)?|(?=([rR]ight|[lL]eft)))'
-                   , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|occipit|front)(al|o)(\s*\(prefrontal gyrus\))?[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=tempor))'
+                  , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe '
+                  , text)
     #  left 'temporal' + 'occipital' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (temporal|occipital|frontal)[, &]*(temporal|occipital|frontal)(\,|\s|\&|and)*(temporal|occipital|frontal)(\,|\s|\&|and|\-)*(lobe(s)?|(?=([rR]ight|[lL]eft)))'
-                   , ' left-temporal-lobe left-occipital-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=pariet))'
+                  , ' left-temporal-lobe left-occipital-lobe left-frontal-lobe '
+                  , text)
 
     #  left 'parietal' + 'temporal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[PT]\-[PT]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([Ll]eft|[lL]t\.?) (parietal|temporal)\s*(and|\,|\&)\s*(parietal|temporal) (lobe(s)?|(?!=(occipital|frontal)))|'
-                   r'(at )?(the )?([Ll]eft|[lL]t\.?) (parieto|parietal|temporo|temporal)[ -]*(temporal|parietal) lobe(s)?\.?'
-                   , ' left-temporal-lobe left-parietal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PT]\-[PT]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([Ll]eft|[lL]t\.?) (pariet|tempor)(al|o)( |and|\,|\&|\-)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|occipit))'
+                  , ' left-temporal-lobe left-parietal-lobe '
+                  , text)
     #  left 'parietal' + 'occipital'
-    text = re.sub(r'(left|[lL]t)\.?\s*[PO]\-[PO]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (parietal|occipital)( |&|,|and|\-)*(parietal|occipital) (lobe(s)?|(?!=(temporal|frontal)))|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) parieto(-)?occipital\s*(lobe(s)?)?'
-                   , ' left-occipital-lobe left-parietal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PO]\-[PO]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|occipit)(al|o)( |\&|\,|and|\-)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|tempor))'
+                  , ' left-occipital-lobe left-parietal-lobe '
+                  , text)
     #  left 'parietal' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[PF]\-[PF]\s*(lobe(s)?)?|'
-                   r'the left.*?F, P lobes|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (frontal|parietal)( |&|,|and|\-)*(frontal|parietal) (lobe(s)?|(?!=(temporal|occipital)))|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) fronto(-)?(parietal|paroal)\s*(lobe(s)?)?'
-                   , ' left-frontal-lobe left-parietal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PF]\-[PF]\s*(lobe(s)?)?|'
+                  r'the left.*?F, P lobes|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|pariet)(al|o)( |\&|\,|and|\-)*(front|pariet|paro)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|tempor))'
+                  , ' left-frontal-lobe left-parietal-lobe '
+                  , text)
     #  left 'temporal' + 'occipital'
-    text = re.sub(r'(left|[lL]t)\.?\s*[TO]\-[TO]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(temporal|occipital|temporo)( |&|,|and|\-)*(temporal|occipital)\s*(lobe(s)?\.?|\,?(?!=(frontal|parietal)))'
-                   , ' left-temporal-lobe left-occipital-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[TO]\-[TO]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(occipit|tempor)(al|o)( |\&|\,|and|\-)*(occipit|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|pariet))'
+                  , ' left-temporal-lobe left-occipital-lobe '
+                  , text)
     #  left 'temporal' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[FT]\-[FT]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (temporal|frontal|fronto|temporo)(\s|\&|\,|and|\-)*(temporal|frontal)\s*(lobe(s)?\.?|(?!=(occipital|parietal)))'
-                   , ' left-temporal-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[FT]\-[FT]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|tempor)(al|o)(\s|\&|\,|and|\-)*(front|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|pariet))'
+                  , ' left-temporal-lobe left-frontal-lobe '
+                  , text)
     #  left 'occipital' + 'frontal'
-    text = re.sub(r'(left|[lL]t)\.?\s*[OF]\-[OF]\s*(lobe(s)?)?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) (occipital|frontal)(\s|\&|\,|and)*(occipital|frontal)\s*(lobe(s)?\.?|(?!=(temporal|parietal)))'
-                   , ' left-occipital-lobe left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[OF]\-[OF]\s*(lobe(s)?)?|'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (occipit|front)(al|o)(\s|\&|\,|and|\-)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=pariet|tempor))'
+                  , ' left-occipital-lobe left-frontal-lobe '
+                  , text)
 
     #  left 'parietal'
-    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) P[ ,)]|(at )?(the )?([Ll]eft|[lL][Tt]\.?) parietal\s*(lobe|and)|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) p(a)?rietal[ &,]*(lobe(s)?|(?!=(occipital|temporal|frontal)))'
-                   , ' left-parietal-lobe '
-                   , text)
+    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) P[ ,)]|'
+                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?) p(a)?riet(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|tempor)))'
+                  , ' left-parietal-lobe '
+                  , text)
     #  left 'temporal'
-    text = re.sub(r'([lL][Tt]\.?|[lL]eft) T[ ,)]|(at )?(the )?([Ll]eft|[lL][Tt]\.?) temporal lobe(s)?\.?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) temporal[ &,.]*(?!=(occipital|parietal|frontal))'
-                   , ' left-temporal-lobe '
-                   , text)
+    text = re.sub(r'([lL][Tt]\.?|[lL]eft) T[ ,)]|'
+                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?) tempor(al|o)(\,|\s|\&|and|\-|\.)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|pariet)))'
+                  , ' left-temporal-lobe '
+                  , text)
     #  left 'occipital'
-    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) O[ ,)]|(at )?(the )?([lL]eft|[lL][Tt]\.?) occipital lobe(s)?\.?|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) occipital[ &,]*(?!=(temporal|parietal|frontal))'
-                   , ' left-occipital-lobe '
-                   , text)
+    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) O[ ,)]|'
+                  r'(at )?(the )?([lL]eft|[lL][Tt]\.?) occipit(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|pariet|tempor)))'
+                  , ' left-occipital-lobe '
+                  , text)
     #  left 'frontal'
-    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) F[ ,):]|(at )?(the )?([Ll]eft|[lL][tT]\.?) frontal( lobe|\,)|'
-                   r'(at )?(the )?([lL]eft|[lL]t\.?) fron(t)?al[ &,]*(?!=(occipital|temporal|parietal))'
-                   , ' left-frontal-lobe '
-                   , text)
+    text = re.sub(r'([lL][Tt]\.?|[Ll]eft) F[ ,):]|'
+                  r'(at )?(the )?([Ll]eft|[lL][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area|\,)s?\.?|(?=[rR]ight|both)|(?!=(occipit|pariet|tempor)))'
+                  , ' left-frontal-lobe '
+                  , text)
     # left 'cerebellum'
-    text = re.sub(r'(the )?([lL][Tt]\.?|[lL]eft) ([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?', ' left-cerebellum ', text)
+    text = re.sub(r'(the )?([lL][Tt]\.?|[lL]eft) ([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?'
+                  , ' left-cerebellum '
+                  , text)
     #  left 'cerebrum'
-    text = re.sub(r'(the )?([lL][Tt]\.?|[lL]eft) (cerebral|cerebrum)\.?', ' left-cerebrum ', text)
+    text = re.sub(r'(the )?([lL][Tt]\.?|[lL]eft) (cerebral|cerebrum)\.?'
+                  , ' left-cerebrum '
+                  , text)
+
 
 
     #  기타 조합의 경우 별도 정형화 작업
@@ -368,6 +379,99 @@ def lobe_preprocessing(text : str):
     return text
 
 
+## 소견문에 포함된 의학 용어(약어 및 기호를 포함한 단어) 정형화 함수.
+#  Findings, Conclusion에 작성된 의학 용어 정형화.
+def medical_words_preprocessing(text : str) -> str :
+    """
+    Medical terminology normalization function for clinical findings.
+    :param text: Medical impression string data (Findings, Conclusion).
+    :return: Converted string data.
+    """
+    text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,))', r' \1-\2 ', text)           # No + 용어를 1개의 토큰으로 만듦.
+    text = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', text)                        # stage 3,
+    text = re.sub(r'\(CE\)', ' contrast-enhancement ', text)                            # (CE)
+    text = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', text)                 # (Non CE)
+    text = re.sub(r'\/c\s', r' with ', text)                                            # /c = with
+    text = re.sub(r'\b[cC] [sS]pine', r' c-spine ', text)                               # c spine  = c-spine
+    text = re.sub(r'\(IA\)\-?', ' stage-ia ', text)                                     # lung(IA)-NSCLC
+    text = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)|'
+                  r'anterior communicating artery', ' posterior-communicating-artery '
+                  , text)                                                               # anterior communicating artery
+    text = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?|'
+                   r'posterior communicating', ' posterior-communicating ', text)       # posterior communicating, PCOM
+    text = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?|'
+                   r'anterior communicating', ' anterior-communicating ', text)         # anterior communicating, ACOM
+    text = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', text)                       # large B-cell lymphoma, DLBCL
+    text = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', text)              # Non-small cell lung cancer.
+    text = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', text)    # Von Hippel–Lindau disease.
+    text = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', text)      # 2개 혼합 용어
+    text = re.sub(r'\bMM[.,]', r' multiple-myeloma ', text)                             # MM을 길이 단위 mm으로 혼용되지 않도록.
+    text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)   # Intracranial TOF MRA
+    text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)           # Neck TOF MRA
+    text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                            # Neck MRA
+    text = re.sub(r'감마나이프|[gG]amma [kK]nife', ' gammaknife ', text)                 # 감마나이프, Gamma knife
+    text = re.sub(r'[cC]ircle of [wW]illis', 'circle-of-willis', text)
+    text = re.sub(r'GRE [iI]mage', 'gre-image', text)
+    text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)       # Clinical information, CI:, CI,
+    text = re.sub(r'[sS]\/[pP]', ' status-post ', text)                                 # s/p, S/P
+    text = re.sub(r'[rR][/][oO]', ' rule-out ', text)                                   # r/o, R/O
+    text = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', text)  # op. site
+    text = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', text)                    # h/o
+    text = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up|'
+                  r'Fu (?=MR(I|A))', ' follow-up ', text)                               # f/u, f-u, f.u
+    text = re.sub(r'N\/V', r'nausea vomiting', text)                                    # N/V = Nausea and Vomiting
+    text = re.sub(r'[tT]2\*', r' t2-star ', text)                                       # T2*
+    text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)               # T2/FLAIR
+    text = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', text)          # t2 hyperintense
+    text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                             # w/u, W/U.
+    text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV]+)', r' \1-\2 ', text)              # CN V
+    text = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ',
+                   text)                                                                # LC(B, CP:6A)   - Child-Pugh score
+    text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)  # grade 2 등
+    text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                 # Zone 1
+    text = re.sub(r'[cC][/][Ww]', ' consistent-with ', text)
+    text = re.sub(r'[fF]\/[iI]', ' further-investigation ', text)
+    text = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific'
+                  , ' non-specific '
+                  , text)
+    text = re.sub(r'with or without', r'with-or-without', text)
+    text = re.sub(r'\b(low|high) b value', r' \1-b-value ', text)                       # low or high b value
+    text = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', text)                      # 3 b values
+    text = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', text)                           # (DDx.
+    text = re.sub(r'[rR]ec\s*[\).]', ' ', text)                                         # Rec)
+    text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                              # d/t, due to
+    text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                           # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
+    text = re.sub(r'imaging', 'image', text)                                            # 'image' 통일.
+    text = re.sub(r'A(\d+)(\s|\.|에|\-|\,|\;)(?:[sS]egment)?s?', r' A\1-segment ', text)     # A1, A2 등을 segment로 구분
+    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\))+(?:[sS]egment)?s?', r' P\1-segment ', text)    # P1, P2 등을 segment로 구분
+    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까)(?:[sS]egment)?s?', r' M\1-segment ', text)     # M1, M2 등을 segment로 구분
+    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의)(?:[sS]egment)?s?', r' V\1-segment ', text)      # V1, V2 등을 segment로 구분
+    text = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', text)                                 # type I, Bipolar I
+    text = re.sub(r'C1\,2', r' atlas-axis ', text)
+    text = re.sub(r'(ICA|ICH|PCA|SDH|SAH|EVD|VA)s', r'\1', text)                            # 뒤에 복수형으로 붙는 약어들
+    text = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 '
+                  , text)                                                                       # Axial T1WI, sagittal T1WI, axial T2WI 등
+    text = re.sub(r'op\.bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', text)    # op.bed, op bed 등
+    text = re.sub(r'[Pp]ost[ -]*op', r'postop', text)                                           # post op
+    text = re.sub(r'백질-회색질', r'white-and-gray-matter', text)
+    text = re.sub(r'백질|[wW]hite [mM]atter', 'white-matter', text)
+    text = re.sub(r'회색질|[gG]ray [mM]atter', 'gray-matter', text)
+    text = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', text)                               # 큰 차이, 큰차이 용어 통일.
+    text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                  # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
+    text = re.sub(r'위얌감[가-힣]*', r'위약감', text)                                              # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'씰룩\s*거림', r' lip-twitching', text)
+    text = re.sub(r'시퀀스', r' sequence ', text)                                                # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'\bight', r'right', text)                                                    # right 오타 = ight
+    text = re.sub(r"beni'gn", r'benign', text)                                                  # benign 오타 수정
+    text = re.sub(r'(lobe|post |mm)\-', r' \1 ', text)                                          # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion)', r' \1', text)                # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'([RL]|os) (MCA|MRA)',
+                   lambda m:
+                   f'right {m.group(2)}' if m.group(1) == 'R' else
+                   f'left {m.group(2)}' if m.group(1) == 'L' or m.group(1) == 'os' else ""
+                   , text)                                                                      # MCA, MRA 등의 부위(right, left) 표현 통일.
+
+    return text
 
 # Findings 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
 # 사람이 이해하기 쉽도록 구분할 목적의 순서 기호 ( 1., 2. 등)
@@ -383,86 +487,8 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ftext = Ftext.replace('\r', '')
         raw_data = Ftext
 
-        ##  1. Findings에 포함된 주요 의학 용어 정형화.
-        Ftext = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,))', r' \1-\2 ', Ftext)                                 # No + 용어를 1개의 토큰으로 만듦.
-        Ftext = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', Ftext)                                               # stage 3,
-        Ftext = re.sub(r'\(CE\)', ' contrast-enhancement ', Ftext)                                                  # (CE)
-        Ftext = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', Ftext)                                       # (Non CE)
-        Ftext = re.sub(r'\/c\s', r' with ', Ftext)                                                                  # /c = with
-        Ftext = re.sub(r'\b[cC] [sS]pine', r' c-spine ', Ftext)                                                     # c spine  = c-spine
-        Ftext = re.sub(r'\(IA\)\-?', ' stage-ia ', Ftext)                                                           # lung(IA)-NSCLC
-        Ftext = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)|'
-                       r'anterior communicating artery', ' posterior-communicating-artery ', Ftext)                        # anterior communicating artery
-        Ftext = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?|'
-                       r'posterior communicating', ' posterior-communicating ', Ftext)                                     # posterior communicating, PCOM
-        Ftext = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?|'
-                       r'anterior communicating', ' anterior-communicating ', Ftext)                                       # anterior communicating, ACOM
-        Ftext = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', Ftext)                                             # large B-cell lymphoma, DLBCL
-        Ftext = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', Ftext)                                        # Non-small cell lung cancer.
-        Ftext = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', Ftext)                          # Von Hippel–Lindau disease.
-        Ftext = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', Ftext)                                  # 2개 혼합
-        Ftext = re.sub(r'\bMM[.,]', r' multiple-myeloma ', Ftext)                                                   # MM을 길이 단위 mm으로 혼용되지 않도록.
-        Ftext = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', Ftext)                 # Intracranial TOF MRA
-        Ftext = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', Ftext)                                 # Neck TOF MRA
-        Ftext = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', Ftext)                                                  # Neck MRA
-        Ftext = re.sub(r'감마나이프|[gG]amma [kK]nife', ' gammaknife ', Ftext)                                        # 감마나이프, Gamma knife
-        Ftext = re.sub(r'[cC]ircle of [wW]illis', 'circle-of-willis', Ftext)
-        Ftext = re.sub(r'GRE [iI]mage', 'gre-image', Ftext)
-        Ftext = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', Ftext)             # Clinical information, CI:, CI,
-        Ftext = re.sub(r'[sS]\/[pP]', ' status-post ', Ftext)                                       # s/p, S/P
-        Ftext = re.sub(r'[rR][/][oO]', ' rule-out ', Ftext)                                         # r/o, R/O
-        Ftext = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', Ftext)     # op. site
-        Ftext = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', Ftext)                          # h/o
-        Ftext = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up|'
-                              r'Fu (?=MR(I|A))', ' follow-up ', Ftext)                                     # f/u, f-u, f.u
-        Ftext = re.sub(r'N\/V', r'nausea vomiting', Ftext)                                              # N/V = Nausea and Vomiting
-        Ftext = re.sub(r'[tT]2\*', r' t2-star ', Ftext)                                                 # T2*
-        Ftext = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', Ftext)                         # T2/FLAIR
-        Ftext = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', Ftext)                                           # t2 hyperintense
-        Ftext = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', Ftext)                                       # w/u, W/U.
-        Ftext = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV]+)', r' \1-\2 ', Ftext)                                   # CN V
-        Ftext = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ', Ftext)   # LC(B, CP:6A)   - Child-Pugh score
-        Ftext = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', Ftext)                        # grade 2 등
-        Ftext = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', Ftext)                                                # Zone 1
-        Ftext = re.sub(r'[cC][/][Ww]', ' consistent-with ', Ftext)
-        Ftext = re.sub(r'[fF]\/[iI]', ' further-investigation ', Ftext)
-        Ftext = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific'
-                       ,' non-specific ', Ftext)
-        Ftext = re.sub(r'with or without', r'with-or-without', Ftext)
-        Ftext = re.sub(r'\b(low|high) b value', r' \1-b-value ', Ftext)                             # low or high b value
-        Ftext = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', Ftext)                            # 3 b values
-        Ftext = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', Ftext)                                 # (DDx.
-        Ftext = re.sub(r'[rR]ec\s*[\).]', ' ', Ftext)                                               # Rec)
-        Ftext = re.sub(r'[dD][/][tT]|due to', ' due-to ', Ftext)                                    # d/t, due to
-        Ftext = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', Ftext)                                 # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
-        Ftext = re.sub(r'imaging', 'image', Ftext)                                                  # 'image' 통일.
-        Ftext = re.sub(r'A(\d+)(\s|\.|에|\-|\,|\;)(?:[sS]egment)?s?', r' A\1-segment ', Ftext)         # A1, A2 등을 segment로 구분
-        Ftext = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\))+(?:[sS]egment)?s?', r' P\1-segment ', Ftext)         # P1, P2 등을 segment로 구분
-        Ftext = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까)(?:[sS]egment)?s?', r' M\1-segment ', Ftext)     # M1, M2 등을 segment로 구분
-        Ftext = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의)(?:[sS]egment)?s?', r' V\1-segment ', Ftext)         # V1, V2 등을 segment로 구분
-        Ftext = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', Ftext)                                   # type I, Bipolar I
-        Ftext = re.sub(r'C1\,2', r' atlas-axis ', Ftext)
-        Ftext = re.sub(r'(ICA|ICH|PCA|SDH|SAH|EVD|VA)s', r'\1', Ftext)                                     # 뒤에 복수형으로 붙는 약어들
-        Ftext = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 ', Ftext)      # Axial T1WI, sagittal T1WI, axial T2WI 등
-        Ftext = re.sub(r'op\.bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', Ftext)        # op.bed, op bed 등
-        Ftext = re.sub(r'[Pp]ost[ -]*op', r'postop', Ftext)                                                  # post op
-        Ftext = re.sub(r'백질-회색질', r'white-and-gray-matter', Ftext)
-        Ftext = re.sub(r'백질|[wW]hite [mM]atter', 'white-matter', Ftext)
-        Ftext = re.sub(r'회색질|[gG]ray [mM]atter', 'gray-matter', Ftext)
-        Ftext = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', Ftext)                         # 큰 차이, 큰차이 용어 통일.
-        Ftext = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', Ftext)                           # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
-        Ftext = re.sub(r'위얌감[가-힣]*', r'위약감', Ftext)                                       # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
-        Ftext = re.sub(r'씰룩\s*거림', r' lip-twitching', Ftext)
-        Ftext = re.sub(r'시퀀스', r' sequence ', Ftext)                                         # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
-        Ftext = re.sub(r'\bight', r'right', Ftext)                                             # right 오타 = ight
-        Ftext = re.sub(r"beni'gn", r'benign', Ftext)                                           # benign 오타 수정
-        Ftext = re.sub(r'(lobe|post |mm)\-', r' \1 ', Ftext)                                   # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
-        Ftext = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion)', r' \1', Ftext)          # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
-        Ftext = re.sub(r'([RL]|os) (MCA|MRA)',
-                       lambda m:
-                        f'right {m.group(2)}' if m.group(1) == 'R' else
-                        f'left {m.group(2)}' if m.group(1) == 'L' or m.group(1) == 'os' else ""
-                    ,   Ftext )                                                                             # MCA, MRA 등의 부위(right, left) 표현 통일.
+        ## x. 의학 용어 정형화 작업
+        Ftext = medical_words_preprocessing(Ftext)
 
         ##  x. lobe 텍스트 데이터에 대한 정형화 작업
         Ftext = lobe_preprocessing(Ftext)
