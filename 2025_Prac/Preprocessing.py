@@ -10,11 +10,13 @@ from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
 from transformers import BertTokenizer
 #nltk.download('punkt_tab')     # LookupError, punkt resource download
 #from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
-# 토큰화 사전에 없는 용어 추가
+
+## 토큰화 사전에 없는 용어 추가
 vocab = ['찢어지는']
 tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 tokenizer_bert.add_tokens(vocab)
 
+## 불용어 토큰 제거 Tuple.
 stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 'or',
              'm', 's',
              '가', '과', '그', '그리고', '는', '년', '등의', '또는', '로', '및', '볼', '분', '수', '서',
@@ -22,8 +24,10 @@ stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 
              '중', '지', '현', '함',
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
 
-def show_info(df: pd.DataFrame):
+## DataFrame 'info' 출력.
+def show_info(df: pd.DataFrame) -> None:
     """
+    Display information about the DataFrame.
     :param df: The DataFrame.
     :return: None. print 'info()'
     """
@@ -33,25 +37,38 @@ def show_info(df: pd.DataFrame):
     df.info()
     print('-----------------------------------------------------------')
 
-# Findings에는 1376개의 NaN(결측치) 데이터 존재.
-# Conclusion에는 34개의 NaN(결측치) 데이터 존재.
-# 결측값을 빈 문자열('')로 변환 처리.
-def empty_to_missing(df : pd.DataFrame):
-      print(f"Findings 결측값 = {df['Findings'].isnull().sum()}")
-      print(f"Conclusion 결측값 = {df['Conclusion'].isnull().sum()}")
 
-      # 모든 결측값에 빈 문자열 대체
-      df.fillna('', inplace=True)
-      print("@@@@ 결측값(NaN)을 빈 문자열('') 처리한다. @@@@\n -- 처리 결과 -- ")
-      # 결측치 처리 결과
-      print(f"Findings 결측값 처리 후 = {df['Findings'].isnull().sum()}")
-      print(f"Conclusion 결측값 처리 후 = {df['Conclusion'].isnull().sum()}")
-      print('-----------------------------------------------------------')
+## 결측값을 빈 문자열('')로 변환 처리.
+#  Findings에는 1376개의 NaN(결측치) 데이터 존재.
+#  Conclusion에는 34개의 NaN(결측치) 데이터 존재.
+def empty_to_missing(df : pd.DataFrame) -> None:
+    """
+    Check the number of missing values in the 'Findings' and 'Conclusion' columns.
+    Replace all missing values with empty strings.
+    :param df: The DataFrame
+    :return: None
+    """
+    print(f"Findings 결측값 = {df['Findings'].isnull().sum()}")
+    print(f"Conclusion 결측값 = {df['Conclusion'].isnull().sum()}")
+
+    # 모든 결측값에 빈 문자열 대체
+    df.fillna('', inplace=True)
+    print("@@@@ 결측값(NaN)을 빈 문자열('') 처리한다. @@@@\n -- 처리 결과 -- ")
+    # 결측치 처리 결과
+    print(f"Findings 결측값 처리 후 = {df['Findings'].isnull().sum()}")
+    print(f"Conclusion 결측값 처리 후 = {df['Conclusion'].isnull().sum()}")
+    print('-----------------------------------------------------------')
 
 
-# 이미 정형화된 수치 데이터에 대한 마스킹 작업 (중복 변환 방지 목적).
+## 이미 정형화된 수치 데이터에 대한 마스킹 작업 (중복 변환 방지 목적).
+#  Length, Width, Height 등의 정형화된 수치 데이터가 다른 정형화 작업에서 중복으로 변환되지 않도록 한다.
 mask_matches = []
-def Mask_Repl(match) :
+def Mask_Repl(match : re.Match) -> str:
+    """
+    Replacement function used with 're.sub()' to mask text matched by 're.compile()'.
+    :param match:
+    :return: token text(string) to replace the matched text.
+    """
     token = f"__PROTECT{len(mask_matches)}__"
     mask_matches.append((token, match.group(0)))  # 원문 저장
     return token
@@ -360,7 +377,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
-        if not  6191 <= i < 6201 : continue
+        if not  6171 <= i < 6191 : continue
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', '')
@@ -788,6 +805,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         global mask_matches
         mask_matches = []
         mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,2}(?:\.\d{1,2})?mm\b')
+        print(mask_pattern)
         masked = mask_pattern.sub(Mask_Repl, Ftext)  # 정형화 전 이미 정형화된 데이터는 겹치지 않도록 마스킹.
 
         # # 마스킹된 텍스트에서 크기 변경 전 1차원 크기 데이터 추출 (ex. 1.5 - 2.1cm 형태에서 1.5 값)
