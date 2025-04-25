@@ -387,90 +387,90 @@ def medical_words_preprocessing(text : str) -> str :
     :param text: Medical impression string data (Findings, Conclusion).
     :return: Converted string data.
     """
-    text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,))', r' \1-\2 ', text)           # No + 용어를 1개의 토큰으로 만듦.
-    text = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', text)                        # stage 3,
-    text = re.sub(r'\(CE\)', ' contrast-enhancement ', text)                            # (CE)
-    text = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', text)                 # (Non CE)
-    text = re.sub(r'\/c\s', r' with ', text)                                            # /c = with
-    text = re.sub(r'\b[cC] [sS]pine', r' c-spine ', text)                               # c spine  = c-spine
-    text = re.sub(r'\(IA\)\-?', ' stage-ia ', text)                                     # lung(IA)-NSCLC
+    text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,))', r' \1-\2 ', text)                   # No + 용어를 1개의 토큰으로 만듦.
+    text = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', text)                                # stage 3,
+    text = re.sub(r'\(CE\)', ' contrast-enhancement ', text)                                    # (CE)
+    text = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', text)                         # (Non CE)
+    text = re.sub(r'\/c\s', r' with ', text)                                                    # /c = with
+    text = re.sub(r'\b[cC] [sS]pine', r' c-spine ', text)                                       # c spine  = c-spine
+    text = re.sub(r'\(IA\)\-?', ' stage-ia ', text)                                             # lung(IA)-NSCLC
     text = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)|'
                   r'anterior communicating artery', ' posterior-communicating-artery '
-                  , text)                                                               # anterior communicating artery
+                  , text)                                                                                       # anterior communicating artery
     text = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?|'
-                   r'posterior communicating', ' posterior-communicating ', text)       # posterior communicating, PCOM
+                         r'posterior communicating'
+                         , ' posterior-communicating '
+                         , text)                                                                                # posterior communicating, PCOM
     text = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?|'
-                   r'anterior communicating', ' anterior-communicating ', text)         # anterior communicating, ACOM
-    text = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', text)                       # large B-cell lymphoma, DLBCL
-    text = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', text)              # Non-small cell lung cancer.
-    text = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', text)    # Von Hippel–Lindau disease.
-    text = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', text)      # 2개 혼합 용어
-    text = re.sub(r'\bMM[.,]', r' multiple-myeloma ', text)                             # MM을 길이 단위 mm으로 혼용되지 않도록.
-    text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)   # Intracranial TOF MRA
-    text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)           # Neck TOF MRA
-    text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                            # Neck MRA
-    text = re.sub(r'감마나이프|[gG]amma [kK]nife', ' gammaknife ', text)                 # 감마나이프, Gamma knife
+                  r'anterior communicating', ' anterior-communicating ', text)                             # anterior communicating, ACOM
+    text = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', text)                                   # large B-cell lymphoma, DLBCL
+    text = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', text)                          # Non-small cell lung cancer.
+    text = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', text)                # Von Hippel–Lindau disease.
+    text = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', text)                  # 2개 혼합 용어
+    text = re.sub(r'\bMM[.,]', r' multiple-myeloma ', text)                                         # MM을 길이 단위 mm으로 혼용되지 않도록.
+    text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)       # Intracranial TOF MRA
+    text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)                       # Neck TOF MRA
+    text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                                        # Neck MRA
+    text = re.sub(r'감마나이프|[gG]amma [kK]nife', ' gammaknife ', text)                              # 감마나이프, Gamma knife
     text = re.sub(r'[cC]ircle of [wW]illis', 'circle-of-willis', text)
     text = re.sub(r'GRE [iI]mage', 'gre-image', text)
-    text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)       # Clinical information, CI:, CI,
-    text = re.sub(r'[sS]\/[pP]', ' status-post ', text)                                 # s/p, S/P
-    text = re.sub(r'[rR][/][oO]', ' rule-out ', text)                                   # r/o, R/O
-    text = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', text)  # op. site
-    text = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', text)                    # h/o
+    text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)                   # Clinical information, CI:, CI,
+    text = re.sub(r'[sS]\/[pP]', ' status-post ', text)                                             # s/p, S/P
+    text = re.sub(r'[rR][/][oO]', ' rule-out ', text)                                               # r/o, R/O
+    text = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', text)           # op. site
+    text = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', text)                                # h/o
     text = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up|'
-                  r'Fu (?=MR(I|A))', ' follow-up ', text)                               # f/u, f-u, f.u
-    text = re.sub(r'N\/V', r'nausea vomiting', text)                                    # N/V = Nausea and Vomiting
-    text = re.sub(r'[tT]2\*', r' t2-star ', text)                                       # T2*
-    text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)               # T2/FLAIR
-    text = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', text)          # t2 hyperintense
-    text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                             # w/u, W/U.
-    text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV]+)', r' \1-\2 ', text)              # CN V
+                  r'Fu (?=MR(I|A))', ' follow-up ', text)                                                  # f/u, f-u, f.u
+    text = re.sub(r'N\/V', r'nausea vomiting', text)                                                # N/V = Nausea and Vomiting
+    text = re.sub(r'[tT]2\*', r' t2-star ', text)                                                   # T2*
+    text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)                           # T2/FLAIR
+    text = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', text)                      # t2 hyperintense
+    text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                                         # w/u, W/U.
+    text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV]+)', r' \1-\2 ', text)                          # CN V
     text = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ',
-                   text)                                                                # LC(B, CP:6A)   - Child-Pugh score
-    text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)  # grade 2 등
-    text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                 # Zone 1
+                   text)                                                                                        # LC(B, CP:6A)   - Child-Pugh score
+    text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)              # grade 2 등
+    text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                             # Zone 1
     text = re.sub(r'[cC][/][Ww]', ' consistent-with ', text)
     text = re.sub(r'[fF]\/[iI]', ' further-investigation ', text)
     text = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific'
                   , ' non-specific '
                   , text)
     text = re.sub(r'with or without', r'with-or-without', text)
-    text = re.sub(r'\b(low|high) b value', r' \1-b-value ', text)                       # low or high b value
-    text = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', text)                      # 3 b values
-    text = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', text)                           # (DDx.
-    text = re.sub(r'[rR]ec\s*[\).]', ' ', text)                                         # Rec)
-    text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                              # d/t, due to
-    text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                           # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
-    text = re.sub(r'imaging', 'image', text)                                            # 'image' 통일.
-    text = re.sub(r'A(\d+)(\s|\.|에|\-|\,|\;)(?:[sS]egment)?s?', r' A\1-segment ', text)     # A1, A2 등을 segment로 구분
-    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\))+(?:[sS]egment)?s?', r' P\1-segment ', text)    # P1, P2 등을 segment로 구분
-    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까)(?:[sS]egment)?s?', r' M\1-segment ', text)     # M1, M2 등을 segment로 구분
-    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의)(?:[sS]egment)?s?', r' V\1-segment ', text)      # V1, V2 등을 segment로 구분
-    text = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', text)                                 # type I, Bipolar I
+    text = re.sub(r'\b(low|high) b value', r' \1-b-value ', text)                                   # low or high b value
+    text = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', text)                                  # 3 b values
+    text = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', text)                                       # (DDx.
+    text = re.sub(r'[rR]ec\s*[\).]', ' ', text)                                                     # Rec)
+    text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                                          # d/t, due to
+    text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                                       # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
+    text = re.sub(r'imaging', 'image', text)                                                        # 'image' 통일.
+    text = re.sub(r'A(\d+)(\s|\.|에|\-|\,|\;)(?:[sS]egment)?s?', r' A\1-segment ', text)             # A1, A2 등을 segment로 구분
+    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\))+(?:[sS]egment)?s?', r' P\1-segment ', text)            # P1, P2 등을 segment로 구분
+    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까)(?:[sS]egment)?s?', r' M\1-segment ', text)            # M1, M2 등을 segment로 구분
+    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의)(?:[sS]egment)?s?', r' V\1-segment ', text)             # V1, V2 등을 segment로 구분
+    text = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', text)                                         # type I, Bipolar I
     text = re.sub(r'C1\,2', r' atlas-axis ', text)
-    text = re.sub(r'(ICA|ICH|PCA|SDH|SAH|EVD|VA)s', r'\1', text)                            # 뒤에 복수형으로 붙는 약어들
-    text = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 '
-                  , text)                                                                       # Axial T1WI, sagittal T1WI, axial T2WI 등
-    text = re.sub(r'op\.bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', text)    # op.bed, op bed 등
-    text = re.sub(r'[Pp]ost[ -]*op', r'postop', text)                                           # post op
+    text = re.sub(r'(ICA|ICH|PCA|SDH|SAH|EVD|VA)s', r'\1', text)                                    # 뒤에 복수형으로 붙는 약어들
+    text = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 ', text)      # Axial T1WI, sagittal T1WI, axial T2WI 등
+    text = re.sub(r'op\.bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', text)        # op.bed, op bed 등
+    text = re.sub(r'[Pp]ost[ -]*op', r'postop', text)                                               # post op
     text = re.sub(r'백질-회색질', r'white-and-gray-matter', text)
     text = re.sub(r'백질|[wW]hite [mM]atter', 'white-matter', text)
     text = re.sub(r'회색질|[gG]ray [mM]atter', 'gray-matter', text)
-    text = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', text)                               # 큰 차이, 큰차이 용어 통일.
-    text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                  # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
-    text = re.sub(r'위얌감[가-힣]*', r'위약감', text)                                              # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', text)                                    # 큰 차이, 큰차이 용어 통일.
+    text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                       # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
+    text = re.sub(r'위얌감[가-힣]*', r'위약감', text)                                                   # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
     text = re.sub(r'씰룩\s*거림', r' lip-twitching', text)
-    text = re.sub(r'시퀀스', r' sequence ', text)                                                # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
-    text = re.sub(r'\bight', r'right', text)                                                    # right 오타 = ight
-    text = re.sub(r"beni'gn", r'benign', text)                                                  # benign 오타 수정
-    text = re.sub(r'(lobe|post |mm)\-', r' \1 ', text)                                          # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
-    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion)', r' \1', text)                # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'시퀀스', r' sequence ', text)                                                     # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'\bight', r'right', text)                                                         # right 오타 = ight
+    text = re.sub(r"beni'gn", r'benign', text)                                                       # benign 오타 수정
+    text = re.sub(r'(lobe|post |mm)\-', r' \1 ', text)                                               # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion)', r' \1', text)                     # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
     text = re.sub(r'([RL]|os) (MCA|MRA)',
                    lambda m:
                    f'right {m.group(2)}' if m.group(1) == 'R' else
                    f'left {m.group(2)}' if m.group(1) == 'L' or m.group(1) == 'os' else ""
-                   , text)                                                                      # MCA, MRA 등의 부위(right, left) 표현 통일.
-
+                   , text)                                                                                      # MCA, MRA 등의 부위(right, left) 표현 통일.
     return text
 
 # Findings 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
@@ -482,6 +482,8 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
         if not  6171 <= i < 6191 : continue
+
+        # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', '')
