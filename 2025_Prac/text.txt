@@ -61,3 +61,40 @@ print("복원된 문장:", masked)
 기저핵	Basal ganglia	운동 조절, 습관 행동
 내포	Internal capsule	대뇌피질과 뇌간 사이 신경 섬유 다발
 측뇌실	Lateral ventricle	뇌척수액이 흐르는 공간 (좌우 대칭 구조)
+
+
+
+
+
+# mask_matches = []
+        # mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,2}(?:\.\d{1,2})?mm\b')
+        # masked = mask_pattern.sub(Mask_Repl, Ftext)
+        #
+        # # 마스킹된 텍스트에서 1차원 크기 데이터 추출.
+        # matches = re.findall(r'(\d{1,2}(?:[.,]\d{1,2})?)\s*(mm|cm)[가-힣]*\b', masked)
+        # if matches:
+        #     # 중복되는 Group에 의해 2번 정형화되지 않도록 세트화.
+        #     matches = sorted(list(set(matches)), key=lambda x: float(x[0]), reverse=True)
+        #     print(matches)
+        #     for grplist in matches:
+        #         if grplist[-1] == 'cm':
+        #             Ltmp = str(int(float(grplist[0]) * 10))
+        #             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+        #             masked = re.sub(fr'([^1-9]|^|\(){Lvalue}\s*cm', fr' Length-{Ltmp}mm ', masked)
+        #         elif grplist[-1] == 'mm' and '.' in grplist[0]:
+        #             # Ltmp = re.sub(r'(\d{1,2}).+', r'\1', grplist[0])
+        #             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+        #             Ltmp = str(round(float(grplist[0])))
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-))({Lvalue}\s*mm)', fr' Length-{Ltmp}mm ', masked)
+        #         elif grplist[-1] == 'mm' and ',' in grplist[0]:
+        #             Ltmp = str(round(float(grplist[0].replace(',', '.'))))
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-))({grplist[0]}\s*mm)', fr' Length-{Ltmp}mm ', masked)
+        #         else:
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-)){grplist[0]}\s*mm[가-힣]*', fr' Length-{grplist[0]}mm', masked)
+        #
+        #         # 마스킹된 텍스트를 복원 후, 최종 결과를 Ctext에 저장.
+        #         for token, text in mask_matches:
+        #             masked = masked.replace(token, text)
+        #
+        #         Ftext = masked
+        #         masked = mask_pattern.sub(Mask_Repl, Ftext)
