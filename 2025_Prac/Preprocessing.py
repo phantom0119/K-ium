@@ -156,7 +156,7 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  both 'occipital'
     text = re.sub(r'[Bb]oth O[ ,)]lobe(s)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) occip(i)?tal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|tempor|pariet)))'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) occ(i)?p(i)?tal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|tempor|pariet)))'
                   , ' right-occipital-lobe left-occipital-lobe '
                   , text)
     #  both 'frontal'
@@ -867,7 +867,7 @@ def unnecessary_preprocessing(text : str) -> str :
     text = re.sub(r'\bI+\.\s', ' ', text)                                                                   # I., II., III.,
     text = re.sub(r'\*?\s*[nN]ote\s*[,:.]', ' ', text)                                                      # * Note:
     text = re.sub(r'(?<=[a-zA-Z가-힣\)])\.(\s|$|\n|\t)', ' ', text)                                          # 문장의 마지막 '.'
-    text = re.sub(r'(\d|10)[.,](\s|(?=MRA|Both))', ' ', text)                                                 # 1., 2., 3.,
+    text = re.sub(r'(\d|10)[.,](\s|(?=MRA|Both|Right))', ' ', text)                                                 # 1., 2., 3.,
     text = re.sub(r'[(\[]\d[)\]]\:?', ' ', text)                                                            # (1), (2), [1], [2] ...
     text = re.sub(r'(?<=\w)[`\'\’]([Ss]|\s)*', ' ', text)                                                   # Parkinson's
     text = re.sub(r'\s(\-+|\(|\))\s', ' ', text)                                                            # 구분 문자 역할의 ' - ' 등.
@@ -898,9 +898,10 @@ def unnecessary_preprocessing(text : str) -> str :
 
     ## x. 구분자 역할의 특수문자 제거
     text = re.sub(r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
-                   r'[-=]+>|'
-                   r'\(<-+|'
-                   r'\*\.\s*\*\s*', ' ', text)
+                  r'[-=]+>|'
+                  r'\(<-+|'
+                  r'\*\.\s*\*\s*|'
+                  r'\*+\d+[, ]\d*', ' ', text)
     return text
 
 
@@ -1096,7 +1097,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_conc = [] # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        if not 651 <= i < 681 : continue
+        if not 961 <= i < 981 : continue
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
         Ctext = Ctext.replace('\r', '')
