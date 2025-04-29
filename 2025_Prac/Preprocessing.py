@@ -187,7 +187,8 @@ def lobe_preprocessing(text : str) -> str:
 
     #  right 'parietal' + 'temporal' + 'occipital'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occ(i)?pit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front))'
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occ(i)?pit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front))|'
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) [PTO]+\(((pariet|tempor|occipit)(al|o)|\s|\-)+\)\s*lobes?\.?'
                   , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe '
                   , text)
     #  right 'parietal' + 'temporal' + 'frontal'
@@ -197,7 +198,7 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  right 'parietal' + 'occipital' + 'frontal'
     text = re.sub(r'([rR]ight|[rR]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit|front)(al|o)[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor))'
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit|front)(al|o)[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor))'
                   , ' right-occipital-lobe right-parietal-lobe right-frontal-lobe '
                   , text)
     #  right 'temporal' + 'occipital' + 'frontal'
@@ -385,7 +386,7 @@ def medical_words_preprocessing(text : str) -> str :
     :param text: Medical impression string data (Findings, Conclusion).
     :return: Converted string data.
     """
-    text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,))', r' \1-\2 ', text)                   # No + 용어를 1개의 토큰으로 만듦.
+    text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,|$))', r' \1-\2 ', text)                   # No + 용어를 1개의 토큰으로 만듦.
     text = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', text)                                # stage 3,
     text = re.sub(r'\(CE\)', ' contrast-enhancement ', text)                                    # (CE)
     text = re.sub(r'\([nN]on CE\)', ' Non-contrast-enhancement ', text)                         # (Non CE)
@@ -394,7 +395,7 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'\(IA\)\-?', ' stage-ia ', text)                                             # lung(IA)-NSCLC
     text = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)|'
                   r'anterior communicating artery', ' posterior-communicating-artery '
-                  , text)                                                                                       # anterior communicating artery
+                  , text)                                                                                   # anterior communicating artery
     text = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?|'
                          r'posterior communicating'
                          , ' posterior-communicating '
@@ -424,7 +425,13 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)                           # T2/FLAIR
     text = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', text)                      # t2 hyperintense
     text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                                         # w/u, W/U.
-    text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV]+)', r' \1-\2 ', text)                          # CN V
+    text = re.sub(r'jx\.', r' junction ', text)                                                     # jx.
+    text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV1-3]+)'
+                        , lambda m:
+                        ' cn cn-ophthalmic' if m.group(2) == 'V1' else
+                        ' cn cn-maxilary' if m.group(2) == 'V2' else
+                        ' cn cn-mandibular' if m.group(2) == 'V3' else r' \1-\2 '
+                        , text)                                                                                 # CN V
     text = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ',
                    text)                                                                                        # LC(B, CP:6A)   - Child-Pugh score
     text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)              # grade 2 등
@@ -442,10 +449,12 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                                          # d/t, due to
     text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                                       # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
     text = re.sub(r'imaging', 'image', text)                                                        # 'image' 통일.
-    text = re.sub(r'A(\d+)(\s|\.|에|\-|\,|\;|$)(?:[sS]egment)?s?', r' A\1-segment ', text)           # A1, A2 등을 segment로 구분
+    text = re.sub(r'A2[/\-]3', r' A2-segment A3-segment ', text)
+    text = re.sub(r'\(?A(\d+)(\s|\.|에|가|\-|\,|\;|$|\))(?:[sS]egment)?s?', r' A\1-segment ', text)  # A1, A2 등을 segment로 구분
     text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\)|$)+(?:[sS]egment)?s?', r' P\1-segment ', text)          # P1, P2 등을 segment로 구분
+    text = re.sub(r'P2\/3', r' P2-segment P3-segment ', text)
     text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까|$)(?:[sS]egment)?s?', r' M\1-segment ', text)          # M1, M2 등을 segment로 구분
-    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$)(?:[sS]egment)?s?', r' V\1-segment ', text)         # V1, V2 등을 segment로 구분
+    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$|\~)(?:[sS]egment)?s?', r' V\1-segment ', text)      # V1, V2 등을 segment로 구분
     text = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', text)                                         # type I, Bipolar I
     text = re.sub(r'C1\,2', r' atlas-axis ', text)
     text = re.sub(r'(ICA|ICH|PCA|SDH|SAH|EVD|VA|ACA|MCA|BG)s', r'\1', text)                         # 뒤에 복수형으로 붙는 약어들
@@ -465,7 +474,7 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'\bight', r'right', text)                                                         # right 오타 = ight
     text = re.sub(r"beni'gn", r'benign', text)                                                       # benign 오타 수정
     text = re.sub(r'(lobe|post |mm)\-(?!\>)', r' \1 ', text)                                         # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
-    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion)', r' \1', text)                     # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion|well)', r' \1', text)                # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
     text = re.sub(r'([RL]|os) (MCA|MRA)',
                    lambda m:
                    f'right {m.group(2)}' if m.group(1) == 'R' else
@@ -830,13 +839,14 @@ def unnecessary_preprocessing(text : str) -> str :
     """
     # 날짜 기록 데이터 (2011.07.08.), (2011. 11. 11.), (2004) 전체 삭제.
     # 날짜 데이터는 '이전'의 의미를 전달할 뿐, 크게 의미 있지 않다고 판단하여 텍스트 삭제 진행.
-    text = re.sub(r'\(?\d{4}\.\d{1,2}\.\d{1,2}\.?\)?|'
+    text = re.sub(r'\(?\d{4}[. ]+\d{1,2}[. ]+\d{1,2}[. ]+?\)?\\?|'
                    r'\(\d{4}\)|\(\d{1,2}\/\d{1,2}\)\.|'                         # (5/19).                          
                    r'\(?\d{4}[.\- ]*\d{1,2}[.\- ]*\d{1,2}[.\-)]*|'
                    r'on (\d+\/\d+\/\d{4}|\d{1,2}\/\d{1,2})\)?\.?|'              # on 5/8/2024, on 5/16  
                    r'in \d{4}(\)\.)?|'                                          # in 2024).
                    r'\d+년\s*\d{1,2}월\s*\d{1,2}일'                              # 2020년 6월 10일
-                   r'밤 \d+시경'                                                 # 밤 11시경
+                   r'밤 \d+시경|'                                                # 밤 11시경
+                   r'[0-9 \-]+[0-9]일'                                          # 6 - 9일
                    , ' ', text)
 
     # 특정 구분 텍스트 삭제 (DDX, Note 등)
@@ -845,7 +855,7 @@ def unnecessary_preprocessing(text : str) -> str :
                    r'\[stack.*?IDX[ 0-9-]*IM[ 0-9-*\]]*\.?|'
                    r'\([sS]e\d+[ ,]*I[Mm][ 0-9]*\)|'
                    r'\s[iI][Mm][ 0-9\).,\]]+|'
-                   r'\(\#[iI][Dd][Xx][0-9 ,.\)\-]+|'
+                   r'\(\#[iI][Dd][Xx][0-9 ,.\)\-\/]+|'
                    r'\(\d( |\,|and)*\d( |\,|and)*\d\)'
                    , ' ', text)                                                 # 영상 이미지 인덱스 번호 표현  ([IDX 4 IM 17].), (Se1, Im 15)
 
@@ -856,9 +866,11 @@ def unnecessary_preprocessing(text : str) -> str :
                    f' month-{m.group(1)}-be ' if m.group(2) in ['month', 'months'] else ""
                    , text)                                                                                  # 2 yr ago  = 2-year-before
     # 'after N-N years' 등의 범위로 작성된 문자열 전처리.
-    text = re.sub(r'after\s*\d+[-~](\d+)\s*years?', r' year-\1-af ', text)                                  # after 1~2 years
+    text = re.sub(r'after\s*\d+[-~](\d+)\s*years?', r' year-\1-af ', text)                       # after 1~2 years
+    # 'after N-N months' 등의 범위로 작성된 문자열 전처리.
+    text = re.sub(r'after\s*\d+[-~](\d+)\s*months?', r' month-\1-af ', text)                     # after 6-12 months
     # 'N년 이후에'의 의미를 갖는 문자열 전처리.
-    text = re.sub(r'after\s*(\d+)\s*(yrs?|years?|months?)\.?'
+    text = re.sub(r'(?:after|\>)\s*(\d+)\s*(yrs?|years?|months?)\.?'
                    , lambda m:
                    f' year-{m.group(1)}-af ' if m.group(2) in ['yr', 'yrs', 'year', 'years'] else
                    f' month-{m.group(1)}-af ' if m.group(2) in ['month', 'months'] else ""
@@ -915,7 +927,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
-        if not  6001 <= i < 6191 : continue
+        #if not  6001 <= i < 6191 : continue
 
         # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
         row = df.iloc[i]
@@ -1097,11 +1109,12 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_conc = [] # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        if not 961 <= i < 981 : continue
+        if not 1621 <= i < 1641 : continue
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
         Ctext = Ctext.replace('\r', '')
         raw_data = Ctext
+        #print(Ctext)
 
         ## x. 의학 용어 정형화 작업.
         Ctext = medical_words_preprocessing(Ctext)
