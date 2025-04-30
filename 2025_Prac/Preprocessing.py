@@ -12,7 +12,7 @@ from transformers import BertTokenizer
 #from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
 
 ## 토큰화 사전에 없는 용어 추가
-vocab = ['찢어지는']
+vocab = ['찢어지는', '촤측']
 tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 tokenizer_bert.add_tokens(vocab)
 
@@ -21,7 +21,7 @@ stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 
              'm', 's',
              '가', '과', '그', '그리고', '는', '년', '등의', '또는', '로', '및', '볼', '분', '수', '서',
              '에서', '이에', '이', '인', '의', '외', '와', '을', '인해', '에는', '에', '에도',
-             '중', '지', '현', '함', '~',
+             '중', '지', '현', '함', '~', '"',
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
 
 ## DataFrame 'info' 출력.
@@ -93,7 +93,7 @@ def lobe_preprocessing(text : str) -> str:
                   , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe left-temporal-lobe left-parietal-lobe left-occipital-lobe '
                   , text)
     #  both, bilateral 'frontal' + 'parietal' + 'temporal'
-    text = re.sub(r'[Bb]oth\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
+    text = re.sub(r'[Bb]oth\s*[PTF]\-[PTF]\-[PTF]\s*((lobe|area)(s)?)?|'
                   r'(at )?the.*?([Bb]ilateral|[Bb]oth|양측).*frontal parietal temporal lobe(s)?|'
                   r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|frontal)[ &,]*(temporal|parietal|frontal)(\,|\s|\&|and|\-|및)*(temporal|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right|[lL]t|[rR]t))|'
                   r'(at )?(the)?([Bb]ilateral|[Bb]oth|양측) (fronto|parieto|temporo)[ ,\-]*(fronto|parieto|temporo)[ ,\-]*(frontal|parietal|temporal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=occipit)))'
@@ -125,12 +125,12 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  both 'parietal' + 'frontal'
     text = re.sub(r'([Bb]oth|the [Bb]ilateral)\s*[PF]\-[PF]\s*(lobe(s)?)?|'
-                  r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|parietal|fronto|parieto)(\.|\,|and|\s|\&|\-)*(frontal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|occipit)))'
+                  r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|parietal|fronto|parieto)(\.|\,|and|\s|\&|\-|lobe)*(frontal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|occipit)))'
                   , ' right-parietal-lobe right-frontal-lobe left-parietal-lobe left-frontal-lobe '
                   , text)
     #  both 'temporal' + 'occipital'
     text = re.sub(r'[Bb]oth\s*[TO]\-[TO]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|temporo|occipital|occipito)(\.|\,|and|\s|\&|\-)*(temporal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=pariet|front)))'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (tempor|occipit?)(al|o)?(\.|\,|and|\s|\&|\-)*(temporal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=pariet|front)))'
                   , ' right-temporal-lobe right-occipital-lobe left-temporal-lobe left-occipital-lobe '
                   , text)
     #  both 'temporal' + 'frontal'
@@ -147,27 +147,27 @@ def lobe_preprocessing(text : str) -> str:
 
     #  both 'parietal'
     text = re.sub(r'[Bb]oth P[ ,)]lobe(s)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) par(i)?etal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|tempor)))'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*par(i)?etal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|tempor)))'
                   , ' right-parietal-lobe left-parietal-lobe '
                   , text)
     #  both 'temporal'
     text = re.sub(r'[Bb]oth T[ ,)]lobe(s)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) temporal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|pariet)))'
+                  r'(at )?(the )?([Bb]ilater(r)?al|[Bb]oth|양측)\s*temporal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|occipit|pariet)))'
                   , ' right-temporal-lobe left-temporal-lobe '
                   , text)
     #  both 'occipital'
     text = re.sub(r'[Bb]oth O[ ,)]lobe(s)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) occ(i)?p(i)?tal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|tempor|pariet)))'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*occ(i)?p(i)?tal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(front|tempor|pariet)))'
                   , ' right-occipital-lobe left-occipital-lobe '
                   , text)
     #  both 'frontal'
     text = re.sub(r'[Bb]oth F[ ,)]lobe(s)?|'
-                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) frontal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(occipit|tempor|pariet)))'
+                  r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*frontal\s*((lobe|area)s?|(and|\,|\s|\&)*(?!=(occipit|tempor|pariet)))'
                   , ' right-frontal-lobe left-frontal-lobe '
                   , text)
 
     #  both 'cerebellum' + 'cerebrum'
-    text = re.sub(r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (cerebral|cerebellar)( |and|\&|\-)*(cerebral|cerebellar)'
+    text = re.sub(r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(cerebral|cerebellar)( |and|\&|\-)*(cerebral|cerebellar)'
                   , r' right-cerebellum right-cerebrum left-cerebellum left-cerebrum '
                   , text)
     #  both 'cerebral' or 'cerebrum'
@@ -194,7 +194,7 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  right 'parietal' + 'temporal' + 'frontal'
     text = re.sub(r'(at )?(the )?([rR]ight|[rR]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|front)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit))'
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|fron(t)?)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit))'
                   , ' right-temporal-lobe right-parietal-lobe right-frontal-lobe '
                   , text)
     #  right 'parietal' + 'occipital' + 'frontal'
@@ -210,7 +210,7 @@ def lobe_preprocessing(text : str) -> str:
 
     #  right 'parietal' + 'temporal'
     text = re.sub(r'(at )?(the )?([Rr](i)?ght|[rR]t)\.?\s*[PT]\-[PT]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|front))'
+                  r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor)(al|o)(\,|\s|\&|and|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|front))'
                   , ' right-temporal-lobe right-parietal-lobe '
                   , text)
     #  right 'parietal' + 'occipital'
@@ -220,7 +220,7 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  right 'parietal' + 'frontal'
     text = re.sub(r'(at )?(the )?(right|[rR]t)\.?\s*[FP](\-|\, )[FP]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([rR]ight|[rR]t\.?) (front|pariet)(al|o)(\,|\s|\&|and|\-)*(front|pariet)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|occipit))'
+                  r'(at )?(the )?([rR]ight|[rR]t\.?) (front|pariet)(al|o)(\,|\s|\&|and|\-|lobe)*(front|pariet)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|occipit))'
                   , ' right-frontal-lobe right-parietal-lobe '
                   , text)
     #  right 'temporal' + 'occipital'
@@ -230,7 +230,7 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  right 'temporal' + 'frontal'
     text = re.sub(r'(at )?(the )?(right|[rR]t)\.?\s*[FT]\-[FT]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|front)(al|o)(\,|\s|\&|and|\-)*(tempor|front|temopr)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|pariet))'
+                  r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|f(ro|or)nt)(al|o)(\,|\s|\&|and|\-)*(tempor|front|temopr)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|pariet))'
                   , ' right-temporal-lobe right-frontal-lobe '
                   , text)
     #  right 'occipital' + 'frontal'
@@ -241,25 +241,25 @@ def lobe_preprocessing(text : str) -> str:
 
     #  right 'parietal'
     text = re.sub(r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) P[ ,).]|'
-                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) pari(e)?t(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(occipit|front|tempor)))|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) (pari(e)?t|paret)(al?|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(occipit|front|tempor)))|'
                   r'우측 두정엽'
                   , ' right-parietal-lobe '
                   , text)
     #  right 'temporal'
     text = re.sub(r'([rR][Tt]\.?|[Rr]ight) T[ ,).]|'
-                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) tempor(al|o)(\,|\s|\&|and|\-)*(lobe(s|에)?[.-]*|(?=left|both)|(?!=(occipit|front|pariet)))|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) tempor(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?[.-]*|(?=left|both)|(?!=(occipit|front|pariet)))|'
                   r'우측 측두엽'
                   , ' right-temporal-lobe '
                   , text)
     #  right 'occipital'
     text = re.sub(r'([rR][Tt]\.?|[Rr]ight) O[ ,).]|'
-                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) occipit(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(pariet|front|tempor)))|'
+                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) (occ(i)?pit|occipti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(pariet|front|tempor)))|'
                   r'우측 후두엽'
                   , ' right-occipital-lobe '
                   , text)
     #  right 'frontal'
     text = re.sub(r'([rR][Tt]\.?|[Rr]ight) F[ ,).]|'
-                  r'(at )?(the )?([Rr]ight|[rR][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=[Ll]eft|[lL]t|both)|(?!=(pariet|occipit|tempor)))|'
+                  r'(at )?(the )?([Rr]ig(ht|th)|[rR][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=[Ll]eft|[lL]t|both)|(?!=(pariet|occipit|tempor)))|'
                   r'우측 전두엽'
                   , ' right-frontal-lobe '
                   , text)
@@ -285,12 +285,12 @@ def lobe_preprocessing(text : str) -> str:
                   , text)
     #  left 'parietal' + 'temporal' + 'frontal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|front|fornt)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=occipit))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|front|fornt)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=occipit))'
                   , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe '
                   , text)
     #  left 'parietal' + 'occipital' + 'frontal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|occipit|front)(al|o)(\s*\(prefrontal gyrus\))?[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=tempor))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|occipit|front)(al|o)(\s*\(prefrontal gyrus\))?[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=tempor))'
                   , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe '
                   , text)
     #  left 'temporal' + 'occipital' + 'frontal'
@@ -301,51 +301,51 @@ def lobe_preprocessing(text : str) -> str:
 
     #  left 'parietal' + 'temporal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PT]\-[PT]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([Ll]eft|[lL]t\.?) (pariet|tempor)(al|o)( |and|\,|\&|\-)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|occipit))'
+                  r'(at )?(the )?([Ll]eft|[lL]t\.?) (pariet|tempor)(al|o)( |and|\,|\&|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|occipit))'
                   , ' left-temporal-lobe left-parietal-lobe '
                   , text)
     #  left 'parietal' + 'occipital'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PO]\-[PO]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pari(et|te)|occipit)(al|o)( |\&|\,|and|\-)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|tempor))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (pari(et|te)|occipit)(al|o)( |\&|\,|and|\-|lobe)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|tempor))'
                   , ' left-occipital-lobe left-parietal-lobe '
                   , text)
     #  left 'parietal' + 'frontal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[PF]\-[PF]\s*((lobe|area)(s)?)?|'
                   r'the left.*?F, P lobes|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|pariet)(al|o)( |\&|\,|and|\-)*(front|pariet|paro)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|tempor))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|pariet)(al|o)( |\&|\,|and|\-|lobe)*(front|pariet|paro)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|tempor))'
                   , ' left-frontal-lobe left-parietal-lobe '
                   , text)
     #  left 'temporal' + 'occipital'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[TO]\-[TO]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(occipit|tempor)(al|o)( |\&|\,|and|\-)*(occipit|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|pariet))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(occipit|tempor)(al|o)( |\&|\,|and|\-|lobe)*(occipit|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|pariet))'
                   , ' left-temporal-lobe left-occipital-lobe '
                   , text)
     #  left 'temporal' + 'frontal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[FT]\-[FT]\s*((lobe|area)(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|tempor)(al|o)(\s|\&|\,|and|\-)*(front|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|pariet))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (front|tempor)(al|o)(\s|\&|\,|and|\-|lobe)*(front|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|pariet))'
                   , ' left-temporal-lobe left-frontal-lobe '
                   , text)
     #  left 'occipital' + 'frontal'
     text = re.sub(r'([Ll]eft|[lL]t)\.?\s*[OF]\-[OF]\s*(lobe(s)?)?|'
-                  r'(at )?(the )?([lL]eft|[lL]t\.?) (occipit|front)(al|o)(\s|\&|\,|and|\-)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=pariet|tempor))'
+                  r'(at )?(the )?([lL]eft|[lL]t\.?) (occipit|front)(al|o)(\s|\&|\,|and|\-|lobe)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=pariet|tempor))'
                   , ' left-occipital-lobe left-frontal-lobe '
                   , text)
 
     #  left 'parietal'
     text = re.sub(r'([lL][Tt]\.?|[Ll]eft) P[ ,)]|'
-                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?) p(a)?riet(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|tempor)))|'
+                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?|elft) (p(a)?riet|parite)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|tempor)))|'
                   r'좌측 두정엽'
                   , ' left-parietal-lobe '
                   , text)
     #  left 'temporal'
     text = re.sub(r'([lL][Tt]\.?|[lL]eft) T[ ,)]|'
-                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?) tempor(al|o)(\,|\s|\&|and|\-|\.)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|pariet)))|'
+                  r'(at )?(the )?([Ll]eft|[lL][Tt]\.?)\s*(tempo[tr]|tempror)(al|o)(\,|\s|\&|and|\-|\.)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|pariet)))|'
                   r'좌측 측두엽'
                   , ' left-temporal-lobe '
                   , text)
     #  left 'occipital'
     text = re.sub(r'([lL][Tt]\.?|[Ll]eft) O[ ,)]|'
-                  r'(at )?(the )?([lL]eft|[lL][Tt]\.?) (occipit|occipti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|pariet|tempor)))|'
+                  r'(at )?(the )?([lL]eft|[lL][Tt]\.?) (occ(i)?pit|occip(i)?ti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|pariet|tempor)))|'
                   r'좌측 후두엽'
                   , ' left-occipital-lobe '
                   , text)
@@ -419,7 +419,7 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)       # Intracranial TOF MRA
     text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)                       # Neck TOF MRA
     text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                                        # Neck MRA
-    text = re.sub(r'감마나이프|[gG]amma [kK]nife', ' gammaknife ', text)                              # 감마나이프, Gamma knife
+    text = re.sub(r'감마나이프|[gG]amma[ \-][kK]nife', ' gammaknife ', text)                          # 감마나이프, Gamma knife
     text = re.sub(r'[cC]ircle of [wW]illis', 'circle-of-willis', text)
     text = re.sub(r'GRE [iI]mage', 'gre-image', text)
     text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)                   # Clinical information, CI:, CI,
@@ -432,14 +432,15 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'N\/V', r'nausea vomiting', text)                                                # N/V = Nausea and Vomiting
     text = re.sub(r'[tT]2\*', r' t2-star ', text)                                                   # T2*
     text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)                           # T2/FLAIR
-    text = re.sub(r'\b[Tt]2 hyperintens(e|ities)', r' t2-hyperintense ', text)                      # t2 hyperintense
+    text = re.sub(r'\b([Tt][12]) hyperintens(e|ities|ity)', r' \1-hyperintense ', text)             # t2,1 hyperintense
     text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                                         # w/u, W/U.
     text = re.sub(r'jx\.', r' junction ', text)                                                     # jx.
+    text = re.sub(r'[iI]nverted ([TVYU])', r' inverted-\1 ', text)                                  # inverted T 등
     text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV1-3]+)'
                         , lambda m:
                         ' cn cn-ophthalmic' if m.group(2) == 'V1' else
                         ' cn cn-maxilary' if m.group(2) == 'V2' else
-                        ' cn cn-mandibular' if m.group(2) == 'V3' else r' \1-\2 '
+                        ' cn cn-mandibular' if m.group(2) == 'V3' else r' cn-v '
                         , text)                                                                                 # CN V
     text = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ',
                    text)                                                                                        # LC(B, CP:6A)   - Child-Pugh score
@@ -447,7 +448,7 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                             # Zone 1
     text = re.sub(r'[cC][/][Ww]', ' consistent-with ', text)
     text = re.sub(r'[fF]\/[iI]', ' further-investigation ', text)
-    text = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific'
+    text = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific|비특이적'
                   , ' non-specific '
                   , text)
     text = re.sub(r'with or without', r'with-or-without', text)
@@ -459,12 +460,13 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                                       # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
     text = re.sub(r'imaging', 'image', text)                                                        # 'image' 통일.
     text = re.sub(r'A2[/\-]3', r' A2-segment A3-segment ', text)
-    text = re.sub(r'\(?A(\d+)(\s|\.|에|가|\-|\,|\;|$|\)|s)(?:[sS]egment)?s?', r' A\1-segment ', text)  # A1, A2 등을 segment로 구분
-    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\)|$|s)+(?:[sS]egment)?s?', r' P\1-segment ', text)        # P1, P2 등을 segment로 구분
+    text = re.sub(r'\(?A(\d+)(\s|\.|에|가|\-|\,|\;|$|\)|s)(?:[sS]eg(e)?ment)?s?', r' A\1-segment ', text)    # A1, A2 등을 segment로 구분
+    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\)|$|s)(?:[sS]egment)?s?', r' P\1-segment ', text)                 # P1, P2 등을 segment로 구분
     text = re.sub(r'P2\/3', r' P2-segment P3-segment ', text)
-    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까|$|s)(?:[sS]eg(e)?ment)?s?', r' M\1-segment ', text)    # M1, M2 등을 segment로 구분
-    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$|\~|\/)(?:[sS]egment)?s?', r' V\1-segment ', text)   # V1, V2 등을 segment로 구분
-    text = re.sub(r'(type|Bipolar) (I+)', r' \1-\2 ', text)                                          # type I, Bipolar I
+    text = re.sub(r'V3\/4', r' V3-segment V4-segment ', text)
+    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까|$|s)(?:[sS]eg(e)?ment)?s?', r' M\1-segment ', text)       # M1, M2 등을 segment로 구분
+    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$|\~|\)|\/)(?:[sS]egment)?s?', r' V\1-segment ', text)   # V1, V2 등을 segment로 구분
+    text = re.sub(r'(type|Bipolar)\s*([IV]+)', r' \1-\2 ', text)                                       # type IV, Bipolar I
     text = re.sub(r'\sC1(\s|$)', r' atlas ', text)
     text = re.sub(r'\sC2(\s|$)', r' axis ', text)
     text = re.sub(r'C1\,2', r' atlas-axis ', text)                                                  # C1 = Atlas, C2 = Axis
@@ -472,7 +474,7 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 ', text)      # Axial T1WI, sagittal T1WI, axial T2WI 등
     text = re.sub(r'op[. ]+bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', text)     # op.bed, op bed 등
     text = re.sub(r'[Pp]ost[ -]*op', r'postop', text)                                               # post op
-    text = re.sub(r'중이-꼭지돌기염', r' otitis-media mastoiditis ', text)                            # 중이-꼭지돌기염
+    text = re.sub(r'중이-?(꼭지|유양)돌기염', r' otomastoiditis ', text)                                # 중이-꼭지돌기염, 유양돌기염
     text = re.sub(r'해면\-추체', r' cavernous-petrous ', text)                                       # 해면-추체
     text = re.sub(r'백질-회색질', r'white-and-gray-matter', text)                                    # 백질-회색질
     text = re.sub(r'백질|[wW]hite [mM]atter', 'white-matter', text)
@@ -480,17 +482,19 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', text)                                   # 큰 차이, 큰차이 용어 통일.
     text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                       # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
     text = re.sub(r'위얌감[가-힣]*', r'위약감', text)                                                  # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'cerebelli\.', r'cerebellum', text)                                              # cerebellum 오타 정정.
     text = re.sub(r'씰룩\s*거림', r' lip-twitching', text)
     text = re.sub(r'시퀀스', r' sequence ', text)                                                     # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
     text = re.sub(r'\bight', r'right', text)                                                         # right 오타 = ight
     text = re.sub(r"beni'gn", r'benign', text)                                                       # benign 오타 수정
     text = re.sub(r'(lobe|post |mm)\-(?!\>)', r' \1 ', text)                                         # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
-    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion|well)', r' \1', text)                # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion|well|sized|focal)', r' \1', text)    # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
     text = re.sub(r'([RL]|os) (MCA|MRA)',
                    lambda m:
                    f'right {m.group(2)}' if m.group(1) == 'R' else
                    f'left {m.group(2)}' if m.group(1) == 'L' or m.group(1) == 'os' else ""
-                   , text)                                                                           # MCA, MRA 등의 부위(right, left) 표현 통일.
+                   , text)                                                                                      # MCA, MRA 등의 부위(right, left) 표현 통일.
+    text = re.sub(r'([0-9. \-]+)m\s', r' \1cm', text)                                                # "1.6-m" 등의 cm 오타 정정.
     return text
 
 
@@ -551,7 +555,7 @@ def cardi_ordinal_preprocessing(text : str) -> str :
                     text = re.sub(r'\d+th', ' over-th ', text)
 
     # lesion의 개수를 전처리.
-    matches = re.findall(r'(\d+) lesion', text)
+    matches = re.findall(r'\b(\d+) lesion', text)
     if matches:
         matches = list(set(matches))
         for grplist in matches:
@@ -577,7 +581,8 @@ def cardi_ordinal_preprocessing(text : str) -> str :
     ## x. '개수'를 의미하는 수치 데이터 전처리.
     text = re.sub(r'(innumerable.*?)(\d+)\)', r'\1 \2-cnt ', text)                                                   # (innumerable, > 30)
     text = re.sub(r'(\d+)\s*개', r' \1-cnt ', text)                                                                  # 2개
-    text = re.sub(r'(\d+)\s*(vessel|patient|in number|faint|small calcified|well\-defined)', r' \1-cnt \2 ', text)   # 숫자 + 단어
+    text = re.sub(r'(\d+)\s*\-?(vessel|patient|in number|faint|small|well\-defined|aneurysms?)'
+                  , r' \1-cnt \2 ', text)                                                                                   # 숫자 + 단어
 
     return text
 
@@ -592,6 +597,50 @@ def demention_preprocessing(text : str) -> str :
     :param text: Medical impression string data (Findings, Conclusion).
     :return: Converted string data.
     """
+    # 3차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
+    # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
+    matches = re.findall(
+        r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:mm\s)?(\-{1,4}\>?)'
+        , text)
+    if matches:
+        for grplist in matches:
+            # Length에 해당하는 수치 데이터가 실수형인 경우
+            if '.' in grplist[0]:
+                Ltmp = str(int(float(grplist[0]) * 10))
+                Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+            else:
+                Ltmp, Lvalue = grplist[0], grplist[0]
+            # Width에 해당하는 수치 데이터가 실수형인 경우
+            if '.' in grplist[2]:
+                Wtmp = str(int(float(grplist[2]) * 10))
+                Wvalue = re.sub(r'\.', r'\\.', grplist[2])
+            else:
+                Wtmp, Wvalue = grplist[2], grplist[2]
+            # Height에 해당하는 수치 데이터가 실수형인 경우
+            if '.' in grplist[4]:
+                Htmp = str(int(float(grplist[4]) * 10))
+                Hvalue = re.sub(r'\.', r'\\.', grplist[4])
+            else:
+                Htmp, Hvalue = grplist[4], grplist[4]
+
+            # Length 정형화
+            text = re.sub(fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
+                          , fr' Length-{Ltmp}mm '
+                          , text)
+
+            # Width 정형화
+            text = re.sub(fr'(?<=Length\-{Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
+                          , fr' Width-{Wtmp}mm '
+                          , text)
+
+            # Height 정형화
+            text = re.sub(fr'(?<=Length\-{Ltmp}mm Width\-{Wtmp}mm).+{Hvalue}\s*(mm)?' + r'\s*\-{1,4}\>?'
+                          , fr' Height-{Htmp}mm change '
+                          , text)
+            # print(matches)
+            # print(Ctext)
+
+
     # 3차원 크기 데이터 정형화
     matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\(neck\))?\s*(cm|mm| )'
                          , text)
@@ -632,51 +681,10 @@ def demention_preprocessing(text : str) -> str :
             # print(matches)
             # print(Ftext)
 
-    # 3차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
-    # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
-    matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:mm\s)?(\-{1,4}\>?)'
-                         , text)
-    if matches:
-        for grplist in matches:
-            # Length에 해당하는 수치 데이터가 실수형인 경우
-            if '.' in grplist[0]:
-                Ltmp = str(int(float(grplist[0]) * 10))
-                Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-            else:
-                Ltmp, Lvalue = grplist[0], grplist[0]
-            # Width에 해당하는 수치 데이터가 실수형인 경우
-            if '.' in grplist[2]:
-                Wtmp = str(int(float(grplist[2]) * 10))
-                Wvalue = re.sub(r'\.', r'\\.', grplist[2])
-            else:
-                Wtmp, Wvalue = grplist[2], grplist[2]
-            # Height에 해당하는 수치 데이터가 실수형인 경우
-            if '.' in grplist[4]:
-                Htmp = str(int(float(grplist[4]) * 10))
-                Hvalue = re.sub(r'\.', r'\\.', grplist[4])
-            else:
-                Htmp, Hvalue = grplist[4], grplist[4]
-
-            # Length 정형화
-            text = re.sub(fr'([^1-9]|^|\(){Lvalue}(?=\s*(x|\*|X)\s*{Wvalue}\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
-                           , fr' Length-{Ltmp}mm '
-                           , text)
-
-            # Width 정형화
-            text = re.sub(fr'(?<=Length\-{Ltmp}mm).+{Wvalue}(?=\s*(x|\*|X)\s*{Hvalue}' + r'\s*\-{1,4}\>?)'
-                          , fr' Width-{Wtmp}mm '
-                          , text)
-
-            # Height 정형화
-            text = re.sub(fr'(?<=Length\-{Ltmp}mm Width\-{Wtmp}mm).+{Hvalue}\s*mm' + r'\s*\-{1,4}\>?'
-                          , fr' Height-{Htmp}mm change '
-                          , text)
-            # print(matches)
-            # print(Ctext)
 
     # 2차원. 변경된 크기 이전의 값을 의미하는 부분의 정형화 (단위 표시가 없으며 뒤에 '-' 또는 '->', '-->', '--->' 등이 붙는다).
     # 실수로 표현된 값은 'cm' 단위이므로 'mm' 단위로 변환한다.
-    matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?\s*(\-{1,4}\>*)(\s*<)?'
+    matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|\*|X)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?\s*(\-{1,4}\>*)(\s*<)?(?!cm|mm)'
                          , text)
     if matches:
         for grplist in matches:
@@ -694,7 +702,7 @@ def demention_preprocessing(text : str) -> str :
                 Wtmp, Wvalue = grplist[2], grplist[2]
 
             # Length 정형화
-            text = re.sub(fr'([^1-9]|^|\(){Lvalue}' + r'(?=\s*(x|\*|X)\s*\d{1,2}(\.\d{1,2})?\s*(cm|mm)?\s*\-{1,4}\>*)(\s*<)?'
+            text = re.sub(fr'([^1-9]|^|\(){Lvalue}' + r'(?=\s*(x|\*|X)\s*\d{1,2}(\.\d{1,2})?\s*(cm|mm)?\s*\-{1,4}\>*)(\s*<)?(?!cm|mm)'
                           , fr' Length-{Ltmp}mm '
                           , text)
 
@@ -706,7 +714,7 @@ def demention_preprocessing(text : str) -> str :
             # print(Ftext)
 
     # 2차원 크기 데이터 정형화
-    matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\-)?(cm|mm|\))'
+    matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:cm|mm)?(x|\*|X|\&)(?:\.)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:\-)?(cm|mm|\))'
                          , text)
     if matches:
         matches = list(set(matches))
@@ -735,7 +743,7 @@ def demention_preprocessing(text : str) -> str :
                                   , text)
                 else:
                     # Length 정형화
-                    text = re.sub(fr'([^1-9]|^){grplist[0]}' + r'(?=\s*(mm)?(x|\*|X)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)'
+                    text = re.sub(fr'([^1-9]|^){grplist[0]}' + r'(?=\s*(mm)?(x|\*|X|\&)\.?\s*(\d{1,2}(\.\d{1,2})?)\s*\-?mm)'
                                   , fr' Length-{grplist[0]}mm '
                                   , text)
 
@@ -849,21 +857,23 @@ def unnecessary_preprocessing(text : str) -> str :
     """
     # 날짜 기록 데이터 (2011.07.08.), (2011. 11. 11.), (2004) 전체 삭제.
     # 날짜 데이터는 '이전'의 의미를 전달할 뿐, 크게 의미 있지 않다고 판단하여 텍스트 삭제 진행.
-    text = re.sub(r'\(?\d{4}[. ]+\d{1,2}[. ]+\d{1,2}[. ]+?\)?\\?|'
+    text = re.sub(r'\(?\d{2,4}[. ]+\d{1,2}[. ]+\d{1,2}[. ]+?\)?\\?|'    # (14.02.15.)
                   r'\(\d{4}\)|\(\d{1,2}\/\d{1,2}\)\.|'                         # (5/19).                          
-                  r'\(?\d{4}[.\- ]*\d{1,2}[.\- ]*\d{1,2}[.\-)]*|'
-                  r'on (\d+\/\d+\/\d{4}|\d{1,2}\/\d{1,2})\)?\.?|'              # on 5/8/2024, on 5/16  
+                  r'\(?\d{4}([.\- ]*\d{1,2}[.\- ]*\d{1,2}[.\-), ]*)+|'         # (2020-09-09, 09-21)
+                  r'on (\d+\/\d+\/\d{4}|\d{1,2}\/\d{1,2})\)?\.?|'              # on 5/8/2024, on 5/16
+                  r'on \d{4}[\-.]\d{1,2}[\-.]\d{1,2}[).,]*|'                   # on 2021.5.28,  on 2022-01-05).
                   r'in \d{4}(\)\.)|'                                           # in 2024).
                   r'\d+년\s*\d{1,2}월\s*\d{1,2}일'                              # 2020년 6월 10일
                   r'밤 \d+시경|'                                                # 밤 11시경
                   r'[0-9 \-]+[0-9]일|'                                         # 6 - 9일
-                  r'for[ 0-9]+days?|'                                          # for 2 days
-                  r'in \d{4}[ .]+\d{1,2}[. ]+\d{1,2}[., ]+'                    # in 2017.9.13,
+                  r'for[ 0-9]+days?|'                                         # for 2 days
+                  r'in \d{4}[ .]+\d{1,2}[. ]+\d{1,2}[., ]+'                   # in 2017.9.13,
                   , ' ', text)
 
     # 특정 구분 텍스트 삭제 (DDX, Note 등)
     text = re.sub(r'\-\s*[iI][dD][xX][0-9 ,]*[iI][mM][0-9 ,]*[iI][dD][xX][0-9 ,]*[iI][mM][0-9 ,]*[.,\- ]?|'
                    r'[\[ ]*I[Dd][Xx][ 0-9]*I[Mm][ 0-9,-]*[\] ,]*|'
+                   r'\([Ii][Dd][Xx][. 0-9]+image \d+\s*\)|'
                    r'\[stack.*?IDX[ 0-9-]*IM[ 0-9-*\]]*\.?|'
                    r'\([sS]e\d+[ ,]*I[Mm][ 0-9]*\)|'
                    r'\s[iI][Mm][ 0-9\).,\]]+|'
@@ -881,6 +891,8 @@ def unnecessary_preprocessing(text : str) -> str :
     text = re.sub(r'after\s*\d+[-~](\d+)\s*years?', r' year-\1-af ', text)                       # after 1~2 years
     # 'after N-N months' 등의 범위로 작성된 문자열 전처리.
     text = re.sub(r'after\s*\d+[-~](\d+)\s*months?', r' month-\1-af ', text)                     # after 6-12 months
+    # 'after N-N weeks' 등의 범위로 작성된 문자열 전처리.
+    text = re.sub(r'after\s*\d+[-~](\d+)\s*weeks?', r' week-\1-af ', text)                       # after 4-8 weeks
     # 'N년 이후에'의 의미를 갖는 문자열 전처리.
     text = re.sub(r'(?:after|\>)\s*(\d+)\s*(yrs?|years?|months?)\.?'
                    , lambda m:
@@ -888,15 +900,19 @@ def unnecessary_preprocessing(text : str) -> str :
                    f' month-{m.group(1)}-af ' if m.group(2) in ['month', 'months'] else ""
                    , text)                                                                                  # after 1 year  = 1-year-after
 
-    text = re.sub(r'\bI+\.\s', ' ', text)                                                                   # I., II., III.,
-    text = re.sub(r'\*?\s*[nN]ote\s*[,:.]', ' ', text)                                                      # * Note:
-    text = re.sub(r'(?<=[a-zA-Z가-힣\)])\.(\s|$|\n|\t)', ' ', text)                                          # 문장의 마지막 '.'
-    text = re.sub(r'(\d|10)[.,](\s|(?=MRA|Both|Right))', ' ', text)                                         # 1., 2., 3.,
-    text = re.sub(r'[(\[]\d[)\]]\:?', ' ', text)                                                            # (1), (2), [1], [2] ...
-    text = re.sub(r'(?<=\w)[`\'\’]([Ss]|\s)*', ' ', text)                                                   # Parkinson's
-    text = re.sub(r'\s(\-+|\(|\))\s', ' ', text)                                                            # 구분 문자 역할의 ' - ' 등.
-    text = re.sub(r'\s\d\)[.,]?\s', ' ', text)                                                              # 순서 번호 역할의 1), 2).
+    text = re.sub(r'\*{2}[ 1-9\-,.]+', r' ', text)                                                            # ** 1-2, **1,2
+    text = re.sub(r'\bI+\.\s', r' ', text)                                                                  # I., II., III.,
+    text = re.sub(r'\*?\s*[nN]ote\s*[,:.]', r' ', text)                                                     # * Note:
+    text = re.sub(r'(?<=[a-zA-Z가-힣\)])\.(\s|$|\n|\t)', r' ', text)                                         # 문장의 마지막 '.'
+    text = re.sub(r'(\b|^)(\d|10)\s*[.,](\s|(?=MRA|Both|Right|Diff|Mic))|\d\s*(?=No -significant)'
+                        , r' ', text)                                                                              # 1., 2., 3.,
+    text = re.sub(r'[(\[]\d[)\]]\:?', r' ', text)                                                           # (1), (2), [1], [2] ...
+    text = re.sub(r'(?<=\w)[`\'\’]([Ss]|\s)*', r' ', text)                                                  # Parkinson's
+    text = re.sub(r'\s(\-+|\(|\))\s', r' ', text)                                                           # 구분 문자 역할의 ' - ' 등.
+    text = re.sub(r'((\s|^|\*+)\d\))+[.,]?\s', r' ', text)                                                  # 순서 번호 역할의 1), 2).
     text = re.sub(r'e\.g\.?', r' ', text)                                                                   # e.g = for example
+    text = re.sub(r'Ex\)', r' ', text)                                                                      # Ex)
+    text = re.sub(r'박정식\.', r' ', text)                                                                   # 무의미한 사람 이름 포함.
 
     # 대소 비교 문자('<', '>') 텍스트 변환.
     # '<', '>'는 다른 특수 문자와 조합하여 '구분 문자' 역할로 사용하는 경우도 있다.
@@ -923,7 +939,7 @@ def unnecessary_preprocessing(text : str) -> str :
     ## x. 구분자 역할의 특수문자 제거
     text = re.sub(r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
                   r'[-=]+>|'
-                  r'\(<-+|'
+                  r'\(<-+|(?<=n) <- (?=s)|'
                   r'\*\.\s*\*\s*|'
                   r'\*+\d+[, ]\d*|'
                   r'\d', ' ', text)
@@ -937,6 +953,12 @@ def pos_neg_preprocessing(text : str) -> str:
 
     if '(-)' in text:
         text = re.sub(r'\(\-\)', 'negative', text)
+
+    if re.search(r'(MRA)\s*\:\s*\+', text):
+        text = re.sub(r'(MRA)\s*\:\s*\+', r' \1 positive ', text)
+
+    if re.search(r'(MRA)\s*\:\s*\-$', text):
+        text = re.sub(r'(MRA)\s*\:\s*\-$', r' \1 negative ', text)
 
     return text
 
@@ -1129,12 +1151,12 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_conc = [] # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        if not 3261 <= i < 3301 : continue
+        if not 6191 <= i < 6211 : continue
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
         Ctext = Ctext.replace('\r', '')
         raw_data = Ctext
-        #print(Ctext)
+
 
         ## x. 의학 용어 정형화 작업.
         Ctext = medical_words_preprocessing(Ctext)
@@ -1148,6 +1170,12 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
 
         ## x. 순서/수량 정형화 작업.
         Ctext = cardi_ordinal_preprocessing(Ctext)
+
+        ## x. Score 또는 검사 대상 수치 데이터 전처리
+        #  ex) SIH score = 1/10, cistern 1/1, collection 0/1 등
+        Ctext = re.sub(r'(score|sinus|enhancement|collection|cistern(?:a)?|distance)\s*[ \=]*(\d+)\/(\d+)'
+                       , r' \1 pos-\2 tot-\3 '
+                       , Ctext)
 
         ## x. N차원 수치 데이터 정형화 작업.
         Ctext = demention_preprocessing(Ctext)
@@ -1243,7 +1271,7 @@ def reorg_wordpieces(tokens : list):
         # 대/소문자 구분되는 특정 단어의 정형화
         if token == 'rt' or token == '우측':
             token = 'right'
-        elif token == 'lt' or token == '좌측':
+        elif token == 'lt' or token == '좌측' or token =='촤측':
             token = 'left'
         elif re.search(r'소견[a-zA-Z가-힣]', token):
             token = '소견'
