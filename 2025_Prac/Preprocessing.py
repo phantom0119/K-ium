@@ -9,7 +9,7 @@ from nltk.tokenize import word_tokenize     # 단어 자연어 토큰화
 from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
 from transformers import BertTokenizer
 #nltk.download('punkt_tab')     # LookupError, punkt resource download
-#from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
+from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
 
 ## 토큰화 사전에 없는 용어 추가
 vocab = ['찢어지는', '촤측']
@@ -23,6 +23,10 @@ stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 
              '에서', '이에', '이', '인', '의', '외', '와', '을', '인해', '에는', '에', '에도',
              '중', '지', '현', '함', '~', '"',
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
+
+## BERT 토큰화 작업 시, [UNK] 토큰에 대한 고유 시퀀스 반영 목적의 사용자 사전.
+custom_token_id = {}
+
 
 ## DataFrame 'info' 출력.
 def show_info(df: pd.DataFrame) -> None:
@@ -403,70 +407,71 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'\b[cC] [sS]pine', r' c-spine ', text)                                       # c spine  = c-spine
     text = re.sub(r'\(IA\)\-?', ' stage-ia ', text)                                             # lung(IA)-NSCLC
     text = re.sub(r'[pP]\-[cC][Oo][Mm]\.?\s*a((\.|\))\)?|rtery)|'
-                  r'anterior communicating artery', ' posterior-communicating-artery '
+                  r'anterior communicating artery'
+                  , ' posterior-communicating-artery '
                   , text)                                                                                   # anterior communicating artery
     text = re.sub(r'[pP]\-[cC][Oo][Mm](\.|\&)?|[pP][cC][oO][mM](\.|\&)?|'
-                         r'posterior communicating'
-                         , ' posterior-communicating '
-                         , text)                                                                                # posterior communicating, PCOM
+                  r'posterior communicating'
+                  , ' posterior-communicating '
+                  , text)                                                                                   # posterior communicating, PCOM
     text = re.sub(r'[aA]\-[cC][oO][mM]\.?|[aA][cC][oO][mM]\.?|'
-                  r'anterior communicating', ' anterior-communicating ', text)                             # anterior communicating, ACOM
-    text = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', text)                                   # large B-cell lymphoma, DLBCL
-    text = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', text)                          # Non-small cell lung cancer.
-    text = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', text)                # Von Hippel–Lindau disease.
-    text = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', text)                  # 2개 혼합 용어
-    text = re.sub(r'\bMM[.,]', r' multiple-myeloma ', text)                                         # MM을 길이 단위 mm으로 혼용되지 않도록.
-    text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)       # Intracranial TOF MRA
-    text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)                       # Neck TOF MRA
-    text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                                        # Neck MRA
-    text = re.sub(r'감마나이프|[gG]amma[ \-][kK]nife', ' gammaknife ', text)                          # 감마나이프, Gamma knife
+                  r'anterior communicating', ' anterior-communicating ', text)                          # anterior communicating, ACOM
+    text = re.sub(r'[Ll]arge [bB]-cell lymphoma', r'dlbcl', text)                               # large B-cell lymphoma, DLBCL
+    text = re.sub(r'[nN]on[- ]*small cell lung cance(r)?', r'nsclc', text)                      # Non-small cell lung cancer.
+    text = re.sub(r'[vV]on [Hh]ippel[- ][lL]indau [Dd]isease', r'vhl-disease', text)            # Von Hippel–Lindau disease.
+    text = re.sub(r'([eE]vans|[Cc]allosal)\s*([iI]ndex|[aA]ngle)', r'\1-\2', text)              # 2개 혼합 용어
+    text = re.sub(r'\bMM[.,]', r' multiple-myeloma ', text)                                     # MM을 길이 단위 mm으로 혼용되지 않도록.
+    text = re.sub(r'[iI]ntracranial [tT][oO][fF] [mM][rR][aA]', 'intracranial-tof-mra', text)   # Intracranial TOF MRA
+    text = re.sub(r'[Nn]eck [tT][oO][fF] [mM][rR][aA]', 'neck-tof-mra', text)                   # Neck TOF MRA
+    text = re.sub(r'[Nn]eck [mM][rR][aA]', 'neck-mra', text)                                    # Neck MRA
+    text = re.sub(r'감마나이프|[gG]amma[ \-][kK]nife', ' gammaknife ', text)                         # 감마나이프, Gamma knife
     text = re.sub(r'[cC]ircle of [wW]illis', 'circle-of-willis', text)
     text = re.sub(r'GRE [iI]mage', 'gre-image', text)
-    text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)                   # Clinical information, CI:, CI,
-    text = re.sub(r'[sS]\/[pP]', ' status-post ', text)                                             # s/p, S/P
-    text = re.sub(r'[rR][/][oO]', ' rule-out ', text)                                               # r/o, R/O
-    text = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', text)           # op. site
-    text = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', text)                                # h/o
+    text = re.sub(r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+', '', text)               # Clinical information, CI:, CI,
+    text = re.sub(r'[sS]\/[pP]', ' status-post ', text)                                         # s/p, S/P
+    text = re.sub(r'[rR][/][oO]', ' rule-out ', text)                                           # r/o, R/O
+    text = re.sub(r'[Oo]p\.\s*site[., (]|(at )?(the )?op site', ' operative-site ', text)       # op. site
+    text = re.sub(r'[hH]\/[oOpP]|history of', r' history-of ', text)                            # h/o
     text = re.sub(r'[Ff][./-][Uu]|follow up|follow\-up|'
-                  r'Fu (?=MR(I|A))', ' follow-up ', text)                                                  # f/u, f-u, f.u
-    text = re.sub(r'N\/V', r'nausea vomiting', text)                                                # N/V = Nausea and Vomiting
-    text = re.sub(r'[tT]2\*', r' t2-star ', text)                                                   # T2*
-    text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)                           # T2/FLAIR
-    text = re.sub(r'\b([Tt][12]) hyperintens(e|ities|ity)', r' \1-hyperintense ', text)             # t2,1 hyperintense
-    text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                                         # w/u, W/U.
-    text = re.sub(r'jx\.', r' junction ', text)                                                     # jx.
-    text = re.sub(r'[iI]nverted ([TVYU])', r' inverted-\1 ', text)                                  # inverted T 등
+                  r'Fu (?=MR(I|A))', ' follow-up ', text)                                               # f/u, f-u, f.u
+    text = re.sub(r'N\/V', r'nausea vomiting', text)                                            # N/V = Nausea and Vomiting
+    text = re.sub(r'[tT]2\*', r' t2-star ', text)                                               # T2*
+    text = re.sub(r'[Tt]2[/\-][fF][lL][aA][iI][rR]', r' t2-flair ', text)                       # T2/FLAIR
+    text = re.sub(r'\b([Tt][12]) hyperintens(e|ities|ity)', r' \1-hyperintense ', text)         # t2,1 hyperintense
+    text = re.sub(r'\b[wW][/-][uU]\.?\b', r'work-up', text)                                     # w/u, W/U.
+    text = re.sub(r'jx\.', r' junction ', text)                                                 # jx.
+    text = re.sub(r'[iI]nverted ([TVYU])', r' inverted-\1 ', text)                              # inverted T 등
     text = re.sub(r'(CN|[cC]ranial [nN]erve)\s*([IV1-3]+)'
                         , lambda m:
                         ' cn cn-ophthalmic' if m.group(2) == 'V1' else
                         ' cn cn-maxilary' if m.group(2) == 'V2' else
                         ' cn cn-mandibular' if m.group(2) == 'V3' else r' cn-v '
-                        , text)                                                                                 # CN V
+                        , text)                                                                             # CN V
     text = re.sub(r'(?<=LC)[ \(]*([ABC])[, ]*(?:CP)?[ :,]([0-9ABC]+)\)?', r' lc-grade-\1-\2 ',
-                   text)                                                                                        # LC(B, CP:6A)   - Child-Pugh score
-    text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)              # grade 2 등
-    text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                             # Zone 1
+                   text)                                                                                    # LC(B, CP:6A)   - Child-Pugh score
+    text = re.sub(r'(?:[gG]rade|[gG]r\.)\s*(\d+|[iI]+)\s*\)?\.?', r' grade-\1 ', text)          # grade 2 등
+    text = re.sub(r'[zZ]one (\d+)', r' Zone-\1 ', text)                                         # Zone 1
     text = re.sub(r'[cC][/][Ww]', ' consistent-with ', text)
     text = re.sub(r'[fF]\/[iI]', ' further-investigation ', text)
     text = re.sub(r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific|비특이적'
                   , ' non-specific '
-                  , text)
+                  , text)                                                                                   # Non specific 관련
     text = re.sub(r'with or without', r'with-or-without', text)
-    text = re.sub(r'\b(low|high) b value', r' \1-b-value ', text)                                   # low or high b value
-    text = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', text)                                  # 3 b values
-    text = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', text)                                       # (DDx.
-    text = re.sub(r'[rR]ec\s*[\).]', ' ', text)                                                     # Rec)
-    text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                                          # d/t, due to
-    text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                                       # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
-    text = re.sub(r'imaging', 'image', text)                                                        # 'image' 통일.
+    text = re.sub(r'\b(low|high) b value', r' \1-b-value ', text)                               # low or high b value
+    text = re.sub(r'(\d+) b value(s)?', r' \1-cnt b-value ', text)                              # 3 b values
+    text = re.sub(r'\s*(\-|\()?\s*[Dd][Dd][xX].?', ' ', text)                                   # (DDx. 구분 목적의 용어 삭제
+    text = re.sub(r'[rR]ec\s*[\).]', ' ', text)                                                 # Rec)  구분 목적의 용어 삭제
+    text = re.sub(r'[dD][/][tT]|due to', ' due-to ', text)                                      # d/t, due to
+    text = re.sub(r'\([iI][dD][xX]\s*\d+.*?\)\.?', ' ', text)                                   # 영상 이미지의 인덱스와 관련된 설명은 전부 삭제.
+    text = re.sub(r'imaging', 'image', text)                                                    # 'image' 통일.
     text = re.sub(r'A2[/\-]3', r' A2-segment A3-segment ', text)
-    text = re.sub(r'\(?A(\d+)(\s|\.|에|가|\-|\,|\;|$|\)|s)(?:[sS]eg(e)?ment)?s?', r' A\1-segment ', text)    # A1, A2 등을 segment로 구분
-    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\)|$|s)(?:[sS]egment)?s?', r' P\1-segment ', text)                 # P1, P2 등을 segment로 구분
+    text = re.sub(r'\(?A(\d+)(\s|\.|에|가|\-|\,|\;|$|\)|s)(?:[sS]eg(e)?ment)?s?', r' A\1-segment ', text)     # A1, A2 등을 segment로 구분
+    text = re.sub(r'P(\d+)(\s|\.|에|\-|\,|\)|$|s)(?:[sS]egment)?s?', r' P\1-segment ', text)     # P1, P2 등을 segment로 구분
     text = re.sub(r'P2\/3', r' P2-segment P3-segment ', text)
     text = re.sub(r'V3\/4', r' V3-segment V4-segment ', text)
-    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까|$|s)(?:[sS]eg(e)?ment)?s?', r' M\1-segment ', text)       # M1, M2 등을 segment로 구분
-    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$|\~|\)|\/)(?:[sS]egment)?s?', r' V\1-segment ', text)   # V1, V2 등을 segment로 구분
-    text = re.sub(r'(type|Bipolar)\s*([IV]+)', r' \1-\2 ', text)                                       # type IV, Bipolar I
+    text = re.sub(r'M(\d+)(\s|\.|에|\-||\,|까|$|s)(?:[sS]eg(e)?ment)?s?', r' M\1-segment ', text)         # M1, M2 등을 segment로 구분
+    text = re.sub(r'V(\d+)(\s|\.|에|\-|\,|의|s|$|\~|\)|\/)(?:[sS]egment)?s?', r' V\1-segment ', text)     # V1, V2 등을 segment로 구분
+    text = re.sub(r'(type|Bipolar)\s*([IV]+)', r' \1-\2 ', text)                                # type IV, Bipolar I 등
     text = re.sub(r'\sC1(\s|$)', r' atlas ', text)
     text = re.sub(r'\sC2(\s|$)', r' axis ', text)
     text = re.sub(r'C1\,2', r' atlas-axis ', text)                                                  # C1 = Atlas, C2 = Axis
@@ -474,21 +479,21 @@ def medical_words_preprocessing(text : str) -> str :
     text = re.sub(r'([aA]xial|[Ss]agittal)\s*(T1WI|T2WI|FLAIR|t2-star|DWI)', r' \1-\2 ', text)      # Axial T1WI, sagittal T1WI, axial T2WI 등
     text = re.sub(r'op[. ]+bed[., (]|(at )?op bed\.|op[., ]*bed(에서)', ' operative-bed ', text)     # op.bed, op bed 등
     text = re.sub(r'[Pp]ost[ -]*op', r'postop', text)                                               # post op
-    text = re.sub(r'중이-?(꼭지|유양)돌기염', r' otomastoiditis ', text)                                # 중이-꼭지돌기염, 유양돌기염
+    text = re.sub(r'중이-?(꼭지|유양)돌기염', r' otomastoiditis ', text)                             # 중이-꼭지돌기염, 유양돌기염
     text = re.sub(r'해면\-추체', r' cavernous-petrous ', text)                                       # 해면-추체
     text = re.sub(r'백질-회색질', r'white-and-gray-matter', text)                                    # 백질-회색질
     text = re.sub(r'백질|[wW]hite [mM]atter', 'white-matter', text)
     text = re.sub(r'회색질|[gG]ray [mM]atter', 'gray-matter', text)
     text = re.sub(r'큰 차이|큰차이|큰 변화', r'signific-diff', text)                                   # 큰 차이, 큰차이 용어 통일.
-    text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                       # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
+    text = re.sub(r'([a-zA-Z]+)\/([a-zA-Z]+)', r'\1-\2', text)                                      # toxic/metabolic 등 중간에 '/' 구분 문자 있는 용어 통일.
     text = re.sub(r'위얌감[가-힣]*', r'위약감', text)                                                  # 오타에 의해 [unk] 토큰 분류되는 단어 처리.
     text = re.sub(r'cerebelli\.', r'cerebellum', text)                                              # cerebellum 오타 정정.
     text = re.sub(r'씰룩\s*거림', r' lip-twitching', text)
-    text = re.sub(r'시퀀스', r' sequence ', text)                                                     # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
-    text = re.sub(r'\bight', r'right', text)                                                         # right 오타 = ight
-    text = re.sub(r"beni'gn", r'benign', text)                                                       # benign 오타 수정
-    text = re.sub(r'(lobe|post |mm)\-(?!\>)', r' \1 ', text)                                         # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
-    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion|well|sized|focal)', r' \1', text)    # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'시퀀스', r' sequence ', text)                                                    # 영어를 한글로 표기한 것 중 [unk] 토큰 분류되는 단어 처리.
+    text = re.sub(r'\bight', r'right', text)                                                        # right 오타 = ight
+    text = re.sub(r"beni'gn", r'benign', text)                                                      # benign 오타 수정
+    text = re.sub(r'(lobe|post |mm)\-(?!\>)', r' \1 ', text)                                        # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
+    text = re.sub(r'\-(insular|positive|T[21]\s|about|diffusion|well|sized|focal)', r' \1', text)   # 특정 단어 앞에 붙은 의미없는 '-' 기호 제거.
     text = re.sub(r'([RL]|os) (MCA|MRA)',
                    lambda m:
                    f'right {m.group(2)}' if m.group(1) == 'R' else
@@ -579,10 +584,10 @@ def cardi_ordinal_preprocessing(text : str) -> str :
                 text = re.sub(fr'{grplist[0]} lesion', r' nine lesion ', text)
 
     ## x. '개수'를 의미하는 수치 데이터 전처리.
-    text = re.sub(r'(innumerable.*?)(\d+)\)', r'\1 \2-cnt ', text)                                                   # (innumerable, > 30)
-    text = re.sub(r'(\d+)\s*개', r' \1-cnt ', text)                                                                  # 2개
+    text = re.sub(r'(innumerable.*?)(\d+)\)', r'\1 \2-cnt ', text)                               # (innumerable, > 30)
+    text = re.sub(r'(\d+)\s*개', r' \1-cnt ', text)                                              # 2개
     text = re.sub(r'(\d+)\s*\-?(vessel|patient|in number|faint|small|well\-defined|aneurysms?)'
-                  , r' \1-cnt \2 ', text)                                                                                   # 숫자 + 단어
+                  , r' \1-cnt \2 ', text)                                                               # 숫자 + 단어
 
     return text
 
@@ -812,11 +817,14 @@ def demention_preprocessing(text : str) -> str :
     mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,3}(?:\.\d{1,3})?mm\b')
     masked = mask_pattern.sub(Mask_Repl, text)
 
+
+
     # 마스킹된 텍스트에서 1차원 크기 데이터 추출.
     matches = re.findall(r'(\d+(?:[.,]\d+)?)\s*(mm|cm)[가-힣]*\b', masked)
     if matches:
         # 중복되는 Group에 의해 2번 정형화되지 않도록 세트화.
-        matches = sorted(list(set(matches)), key=lambda x: float(x[0]), reverse=True)
+        converted = [(s.replace(',', '.'), unit) for s, unit in matches]                    # ','로 오타가 난 실수 데이터를 '.'로 변환.
+        matches = sorted(list(set(converted)), key=lambda x: float(x[0]), reverse=True)     # 실수 값을 기준으로 내림차순 정렬 (의도되지 않은 중복 정제 오류 방지 목적).
         for grplist in matches:
             if grplist[-1] == 'cm':
                 Ltmp = str(int(float(grplist[0]) * 10))
@@ -948,6 +956,11 @@ def unnecessary_preprocessing(text : str) -> str :
 
 ## 양성(positive), 음성(negative) 내용 전처리.
 def pos_neg_preprocessing(text : str) -> str:
+    """
+    Preprocessing of positive and negative contents.
+    :param text: Medical impression string data (Findings, Conclusion).
+    :return: Converted string data.
+    """
     if '(+)' in text:
         text = re.sub(r'\(\+\)|\w\s\+', 'positive', text)
 
@@ -968,10 +981,16 @@ def pos_neg_preprocessing(text : str) -> str:
 # 사람이 이해하기 쉽도록 구분할 목적의 순서 기호 ( 1., 2. 등)
 # 특수 문자 표현 (2개 이상의 줄넘김 또는 --> 등의 방향 표시 등)
 def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
+    """
+    Preprocessing function for the 'Findings' Column.
+    :param df: raw(original) dataframe.
+    :param redf: the dataframe for converted text(Findings) data.
+    :return: A list for checking the data before and after preprocessing.
+    """
     cnt = 0                         # Test print count
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
-    for i in range(df.shape[0]) :   # shape는 (Row 수, Column 수)
+    for i in range(df.shape[0]) :   # shape (Row 수, Column 수)
         #if not  6001 <= i < 6191 : continue
 
         # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
@@ -980,27 +999,27 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ftext = Ftext.replace('\r', ' ')
         raw_data = Ftext
 
-        ## x. 의학 용어 정형화 작업.
+        ##  1. 의학 용어 정형화 작업.
         Ftext = medical_words_preprocessing(Ftext)
 
-        ##  x. lobe 텍스트 데이터에 대한 정형화 작업.
+        ##  2. lobe 텍스트 데이터 정형화 작업.
         Ftext = lobe_preprocessing(Ftext)
 
-        ##  x. 수량 표현(one, two, three)과 순서 표현(1st, 2nd, 3rd) 정형화 작업.
+        ##  3. 수량 표현(one, two, three)과 순서 표현(1st, 2nd, 3rd) 정형화 작업.
         Ftext = cardi_ordinal_preprocessing(Ftext)
 
-        ## x. 'ms'를 의미하는 수치 데이터 전처리.
+        ##  4. 'ms'를 의미하는 수치 데이터 전처리.
         Ftext = re.sub(r'\b(\d+)\s*(MS|ms)\b|TE\s+(\d+)'
                        , lambda m: (
                             f"ms-{m.group(1)}" if m.group(1) else           # \1: 숫자 (ms)
                             f"te ms-{m.group(3)}" if m.group(3) else ""     # TE 144 등의 ms없는 표현
                        ), Ftext)
 
-        ## x. % = percent 값 전처리.
-        Ftext = re.sub(r'(\d+)\s*\%', r' percent-\1 ', Ftext)               # 10%  --> percent-10
+        ##  5. % = percent 값 전처리.
+        Ftext = re.sub(r'(\d+)\s*\%', r' percent-\1 ', Ftext)   # 10%  --> percent-10
 
 
-        ## Cho/NAA 수치 데이터 전처리.
+        ##  6. Cho/NAA 수치 데이터 전처리.
         #  Cho/Cr = 2.29,  Cho/NAA = 1.14
         matches = re.findall(r'\(?(Cho\-NAA|Cho\-Cr|[eE]vans\-index|[cC]allosal\-angle)(?:\s|\,|\=|increased)+((?:\d+(?:\.\d+)?(?:[, ;.]+)?)+)(?:\)?\.?| at|\()', Ftext)
         #Ftext = re.sub(r'\(?(Cho\-NAA|Cho\-Cr)[ ,=]*', r' ', Ftext)
@@ -1015,27 +1034,29 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                     Ftext = re.sub(fr'\b{v}\b', fr' {grplist[0]}-{tmp} ', Ftext)
 
 
-        ## x. 'Cho/Cr, Cho/NAA 수치의 기준 값 전처리.
+        ##  7. 'Cho/Cr, Cho/NAA 수치의 기준 값 전처리.
         #  Cho/Cr = 2.29 (< 2.39). Cho/NAA = 1.14 (< 1.73).
         matches = re.findall(r'(Cho\-Cr|Cho\-NAA)\-(\d+\-\d+)\s*\(?([<>])\s*(\d+(?:\.\d+))\)?\.?', Ftext)
         if matches:
             for grplist in matches:
-                print(grplist)
                 Ftext = re.sub(fr'(?<={grplist[0]}-{grplist[1]})\s*\(?\<\s*', r' less-than ', Ftext)
                 Ftext = re.sub(fr'(?<={grplist[0]}-{grplist[1]})\s*\(?\>\s*', r' greater-than ', Ftext)
                 tmp2 = grplist[3].replace('.', '-')
                 Ftext = re.sub(fr'({grplist[0]}-{grplist[1]}\s*(greater|less)-than)\s*{grplist[3]}\)?\.?', fr' \1 {grplist[0]}-{tmp2} ', Ftext)
 
 
-        ## x. 'ADC' 수치 데이터 전처리.
+        ##  8. 'ADC' 수치 데이터 전처리.
         #  ADC(avg) values of 0.862
         Ftext = re.sub(r'ADC.*value(?:s)?.*?(\d+(?:\.\d+)?)\s*\)?\.?', r' adc-\1 ', Ftext)
         Ftext = re.sub(r'(adc-\d+)\.(\d+)', r' \1-\2 ', Ftext)
         Ftext = re.sub(r'(adc-\d+-\d+)[ \-]+>+\s*(\d+(?:\.\d+)?)', r' \1 change adc-\2 ', Ftext)
         Ftext = re.sub(r'(adc-\d+)\.(\d+)', r' \1-\2 ', Ftext)
+
         # 특수문자가 포함된 일반적인 ADC 수치 데이터 정형화.
         matches = re.finditer(r'\(?(ADC)[ ,=]*(\d+(?:\.\d+)?(?:[, ]+\d+(?:\.\d+)?)*)\)\.?', Ftext)
-        #Ftext = re.sub(r'\(?ADC\s*', r' ', Ftext)                                                   # ADC 값 정형화 전 'ADC' 삭제
+        #Ftext = re.sub(r'\(?ADC\s*', r' ', Ftext)   # ADC 값 정형화 전 'ADC' 삭제
+
+        # (ADC 0.652, 1.062)    --> 'adc-0-652', 'adc-1-062'
         if matches :
             for grplist in matches:
                 grp_values = grplist.group(2)
@@ -1045,18 +1066,19 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                     tmp = re.sub(r'\.', r'-', v)
                     Ftext = re.sub(fr'{v}', fr'adc-{tmp}', Ftext)
 
-        ## x. Score 또는 검사 대상 수치 데이터 전처리
+
+        ##  9. Score 또는 검사 대상 수치 데이터 전처리
         #  ex) SIH score = 1/10, cistern 1/1, collection 0/1 등
         Ftext = re.sub(r'(score|sinus|enhancement|collection|cistern(?:a)?|distance)\s*[ \=]*(\d+)\/(\d+)'
                        , r' \1 pos-\2 tot-\3 '
-                       , Ftext)
+                       , Ftext)                             #  1/10   -->  'pos-1', 'tot-10'
 
-        ## x. 양성과 음성을 구분하는 문자를 명확한 단어로 변경.
+        ##  10. 양성과 음성을 구분하는 문자를 명확한 단어로 변경.
         ## (+) --> positive, (-) --> negative
         Ftext = pos_neg_preprocessing(Ftext)
 
 
-        # aneurysm의 4차원 값 표현 구분
+        ##  11. aneurysm의 4차원 값 표현 구분
         # Length + Width + Height(Depth) + Neck
         matches = re.findall(r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*(mm|cm)', Ftext)
         if matches :
@@ -1106,112 +1128,123 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
                                    , fr' Neck-{Ntmp}mm '
                                    , Ftext)
 
-        ## x. N차원의 수치 데이터 정형화 작업.
+        ##  12. N차원의 수치 데이터 정형화 작업.
         Ftext = demention_preprocessing(Ftext)
 
-        ## x. 날짜, 시간, 무의미한 구분 문자열 전처리(삭제) 작업.
+        ##  13. 날짜, 시간, 무의미한 구분 문자열 전처리(삭제) 작업.
         Ftext = unnecessary_preprocessing(Ftext)
 
-        token_test = tokenizer_bert.tokenize(Ftext)  # 전처리한 소견을 토큰화
-        token_test = merge_wordpieces(token_test)  # 토큰 데이터를 재결합
-        token_test = reorg_wordpieces(token_test)  # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
-        ## 8. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
-        #print(f"Start conv\n{Ftext}")
-        Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
-        print('##############################################')
-        print(f'## {i}_idx ##')
-        print(raw_data)
-        print('-------' * 20)
-        # print(Ftext)
-        # print('-------' * 20)
-        print(token_test)
-        print('##############################################')
+        ##  14. 문자열 토큰화 작업.
+        token_test = tokenizer_bert.tokenize(Ftext)     # 전처리한 소견을 토큰화
+        token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
+        token_test = reorg_wordpieces(token_test)       # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
-        # matches = re.findall(r'\.|\,', Ctext)
-        # cnt += 1
-        # if cnt == 30 : break
+        ## x. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
+        #Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
 
-        ## 모든 Raw Data 탐색 결과를 저장 후 return.
+        #if re.search(r'SIH score', raw_data, re.IGNORECASE):
+            # print('##############################################')
+            # print(f'## {i}_idx ##')
+            # print(raw_data)
+            # print('-------' * 20)
+            #print(Ftext)
+            # print('-------' * 20)
+            # print(token_test)
+            # print('##############################################')
+
+
+        ##  15. 모든 Raw Data 탐색 결과를 저장 후 return.
         raw_find.append(raw_data)
         after_find.append(Ftext)
 
-        redf.loc[i, 'finding'] = Ftext
-
-        # 테스트 목적의 반복문 도중 반환.
-        # if cnt == 100 :
-        #     break
+        redf.loc[i, 'finding'] = token_test
 
     return raw_find, after_find
 
 
 # Conclusion 데이터 전처리 작업 ( 학습에 불필요한 단어(용어)를 사전에 제거/변환하므로써 분류 성능을 높일 목적 )
 def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
-    raw_conc = []   # Conclusion Raw Data List
-    after_conc = [] # Conclusion Preprocesing List
+    """
+    Preprocessing function for the 'Conclusion' Column.
+    :param df: raw(original) dataframe.
+    :param redf: the dataframe for converted text(Findings) data.
+    :return: A list for checking the data before and after preprocessing.
+    """
+    raw_conc = []       # Conclusion Raw Data List
+    after_conc = []     # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        if not 6191 <= i < 6211 : continue
+        #if not 6191 <= i < 6211 : continue
+
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
         Ctext = Ctext.replace('\r', '')
         raw_data = Ctext
 
 
-        ## x. 의학 용어 정형화 작업.
+        ##  1. 의학 용어 정형화 작업.
         Ctext = medical_words_preprocessing(Ctext)
 
-        ##  x. 대뇌 lobe 텍스트 데이터에 대한 정형화 작업.
+        ##  2. 대뇌 lobe 텍스트 데이터에 대한 정형화 작업.
         Ctext = lobe_preprocessing(Ctext)
 
-        ## x. 양성과 음성을 구분하는 문자를 명확한 단어로 변경.
+        ##  3. 양성과 음성을 구분하는 문자를 명확한 단어로 변경 작업.
         ## (+) --> positive, (-) --> negative
         Ctext = pos_neg_preprocessing(Ctext)
 
-        ## x. 순서/수량 정형화 작업.
+        ##  4. 순서/수량 정형화 작업.
         Ctext = cardi_ordinal_preprocessing(Ctext)
 
-        ## x. Score 또는 검사 대상 수치 데이터 전처리
+        ##  5. Score 또는 검사 대상 수치 데이터 전처리 작업.
         #  ex) SIH score = 1/10, cistern 1/1, collection 0/1 등
         Ctext = re.sub(r'(score|sinus|enhancement|collection|cistern(?:a)?|distance)\s*[ \=]*(\d+)\/(\d+)'
                        , r' \1 pos-\2 tot-\3 '
                        , Ctext)
 
-        ## x. N차원 수치 데이터 정형화 작업.
+        ##  6. N차원 수치 데이터 정형화 작업.
         Ctext = demention_preprocessing(Ctext)
 
-        ## x. 불용어 및 불필요한 표현에 대한 정형화 작업.
+        ##  7. 날짜, 시간, 무의미한 구분 문자열 등 불용어와 불필요한 표현에 대한 정형화 작업.
         Ctext = unnecessary_preprocessing(Ctext)
 
-        ## x. 비율(%) 데이터 전처리.
+        ##  8. 비율(%) 데이터 전처리 작업.
         Ctext = re.sub(r'(\d+)\s*\%', r' percent-\1 ', Ctext)  # 10%  --> percent-10
 
-        token_test = tokenizer_bert.tokenize(Ctext)  # 전처리한 소견을 토큰화
-        token_test = merge_wordpieces(token_test)  # 토큰 데이터를 재결합
-        token_test = reorg_wordpieces(token_test)  # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
+        ##  9. 문자열 토큰화 작업.
+        token_test = tokenizer_bert.tokenize(Ctext)     # 전처리한 소견을 토큰화
+        token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
+        token_test = reorg_wordpieces(token_test)       # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
-        #Ctext = re.sub(r'\s{2,20}', ' ', Ctext)
-        print('##############################################')
-        print(f'## {i}_idx ##')
-        print(raw_data)
-        print('-------' * 20)
+
+        # print('##############################################')
+        # print(f'## {i}_idx ##')
+        # print(raw_data)
+        # print('-------' * 20)
         # print(Ftext)
         # print('-------' * 20)
-        print(token_test)
-        print('##############################################')
+        # print(token_test)
+        # print('##############################################')
 
-        ## 모든 Raw Data 탐색 결과를 저장 후 return.
+        ##  10. 모든 Raw Data 탐색 결과를 저장 후 return.
         raw_conc.append(raw_data)
         after_conc.append(Ctext)
 
-        redf.loc[i, 'conclusion'] = Ctext
+        redf.loc[i, 'conclusion'] = token_test
 
     return raw_conc, after_conc
+
 
 # 테스트 목적의 csv 파일 반환.
 # Raw_Text : 텍스트 데이터 원본.
 # After_Text : Preprocessing 결과 텍스트.
 def Get_DataFrame_to_CSV(raw_txt, af_txt):
+    """
+    Exporting the dataframe to a CSV file.
+    :param raw_txt: raw(original) text.
+    :param af_txt: converted text.
+    :return: None
+    """
     df = pd.DataFrame({
         'Raw_Text': raw_txt,
         'After_Text': af_txt
@@ -1220,7 +1253,15 @@ def Get_DataFrame_to_CSV(raw_txt, af_txt):
     df.to_csv('output.csv', index=False, encoding='utf-8-sig')  # 윈도우에서 한글 포함 시 utf-8-sig 권장
 
 
+
+# 분류(class-정답지) 데이터를 정수 값으로 변경.
 def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
+    """
+    Convert the data in the classification column(AcuteInfarction) to integers.
+    :param df: raw(original) dataframe.
+    :param redf: the dataframe for converted text(Findings) data.
+    :return: None
+    """
     for i in range(df.shape[0]):
         row = df.iloc[i]
         Atext = int(str(row['AcuteInfarction']).strip())
@@ -1229,6 +1270,11 @@ def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
 
 # '##', '-'로 토큰이 분리된 용어를 재결합.
 def merge_wordpieces(tokens : list):
+    """
+    Recombine terms that are split into tokens by '##' or '-' into a single word.
+    :param tokens: A list of words split for tokenizaation.
+    :return: A list of recombined words.
+    """
     words = []
     current_word = ''
     for token in tokens:
@@ -1249,10 +1295,15 @@ def merge_wordpieces(tokens : list):
 
 # 불용어(and, the, 그, at 등) 제거 및 영문+한글('edema로', 'CTA를') 조합에서 불필요한 한글 제거.
 def reorg_wordpieces(tokens : list):
+    """
+    Remove stopwords and preprocess words that combine English and Korean characters.
+    :param tokens: A list of words split for tokenizaation.
+    :return: A list of preprocessed words.
+    """
     filtered_words = [tk.lower() for tk in tokens if tk.lower() not in stopwords]
     for idx, token in enumerate(filtered_words):
         if re.search(r'[가-힣]', token) and re.search(r'[a-zA-Z-]', token):
-            token = re.sub(r'[^a-zA-Z-]', '', token)    # 영어 + 한글 조합의 토큰에서 한글 제거
+            token = re.sub(r'[^a-zA-Z-]', '', token)                                # 영어 + 한글 조합의 토큰에서 한글 제거
             filtered_words[idx] = token
 
         # 한글 표현에서 "[용어]의", "[용어]로" 등의 형태로 토큰화될 수 있는 표현 전처리
@@ -1275,11 +1326,50 @@ def reorg_wordpieces(tokens : list):
             token = 'left'
         elif re.search(r'소견[a-zA-Z가-힣]', token):
             token = '소견'
-        elif token == '근위내경돔갱':         token = '근위내경동맥'        #오타 정정
+        elif token == '근위내경돔갱':         token = '근위내경동맥'          #오타 정정
         elif token == '임':                  token = '있다'               # 임 -> 이다 -> 있다
-        elif token in ['분', '환자', 'pt']:   token = 'patient'          # 분 (시간 단위는 전처리해서 삭제되었음을 전제로 둠) -> 사람 -> 환자
+        elif token in ['분', '환자', 'pt']:   token = 'patient'           # 분 (시간 단위는 전처리해서 삭제되었음을 전제로 둠) -> 사람 -> 환자
         filtered_words[idx] = token
     return filtered_words
+
+
+
+# 리스트에 있는 단어 원소들을 하나의 고유한 시퀀스로 변환
+# 만약 BERT 모델의 사전(vocab)에 없는 단어인 경우에는 사용자 사전(custom_token_id)을 통해 고유 시퀀스를 추가한다.
+def word_sequencing(df : pd.DataFrame):
+    tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
+    last_cus_id = max(tokenizer.vocab.values()) + 1     # BERT 모델의 vocab 가장 마지막 id 값 이후 번호로 부여.
+    MAX_LEN = 285                                       # 확인된 리스트의 최대 원소 수 = 281개
+    sentences = df['context']
+    tokenized_sentences = []
+
+    cnt = 0
+    for sl in sentences:
+        bert_words = ['[CLS]'] + sl + ['[SEP]']                     # BERT 토큰화를 위해 시점과 종점 구분자 추가.
+        input_ids = tokenizer.convert_tokens_to_ids(bert_words)     # pretrained 모델을 바탕으로 단어 시퀀스 변환.
+
+        cust_ids = []
+        for tk, id in zip(bert_words, input_ids):                   # id 값이 100인 경우 = [UNK] 토큰 = 사용자 지정 시퀀스 부여 필요.
+            if id == tokenizer.unk_token_id:
+                if tk not in custom_token_id:                       # 토큰(단어)가 사용자 사전에 없는 경우 추가하여 시퀀스 부여.
+                    custom_token_id[tk] = last_cus_id
+                    last_cus_id += 1
+                cust_ids.append(custom_token_id[tk])
+            else:
+                cust_ids.append(id)
+
+        # BERT 입력 시 모든 시퀀스의 길이가 같아야 한다.
+        cust_ids = pad_sequences([cust_ids]         # 시퀀스 크기를 고정(285)하여 변환.
+                                , maxlen=MAX_LEN    # 출력 시퀀스 고정 길이
+                                , dtype="long"      # 정수형 시퀀스 데이터 타입
+                                , truncating="pre"  # 길이가 길면 앞에서부터 자름
+                                , padding="pre")    # 길이가 짧으면 앞에서부터 0을 채움
+
+        print(bert_words)
+        print(cust_ids)
+        cnt += 1
+        if cnt == 10: break
+
 
 
 def sent_tokenizing(df : pd.DataFrame):
@@ -1337,27 +1427,54 @@ if __name__ == '__main__':
     memory usage: 145.2+ KB
     """
 
+    #show_info(pre_df)
+    """
+    <class 'pandas.core.frame.DataFrame'>
+    RangeIndex: 0 entries
+    Data columns (total 3 columns):
+     #   Column      Non-Null Count  Dtype 
+    ---  ------      --------------  ----- 
+     0   finding     0 non-null      object
+     1   conclusion  0 non-null      object
+     2   class       0 non-null      object
+    dtypes: object(3)
+    memory usage: 132.0+ bytes
+    """
+
+
     ## 3.Missing Value Handling
     empty_to_missing(df)
 
+
     ## 4.'Findings' Sentence Preprocessing
-    #raw_find, after_find = Findings_Preprocessing(df, pre_df)
+    raw_find, after_find = Findings_Preprocessing(df, pre_df)
 
 
-    # 번외. 테스트 목적의 데이터프레임 csv 추출.
+    # 번외. 테스트 목적의 데이터프레임 csv 추출 (Findings).
     #Get_DataFrame_to_CSV(raw_find, after_find)
 
 
     ## 5.'Conclusion' Sentence Preprocessing
     raw_conc, after_conc = Conclusion_Preprocessing(df, pre_df)
 
+    # 번외. 테스트 목적의 데이터프레임 csv 추출 (Conclusion).
     #Get_DataFrame_to_CSV(raw_conc, after_conc)
 
     ## 6.Classification ('AcuteInfarction' Preprocessing)
-    #Acute_Classification(df, pre_df)
+    Acute_Classification(df, pre_df)
 
-    ## 7.DataSet Tokenization
-    #sent_tokenizing(pre_df)
+    ## 7. Findings와 Conclusion의 토큰 리스트를 합쳐(extend) 1개의 Column으로 생성.
+    pre_df['context'] = pre_df['finding'] + pre_df['conclusion']
+    pre_df = pre_df.drop(columns=['finding', 'conclusion'])
+
+    # 토큰 리스트의 최대 크기 계산 목적
+    # 281개의 원소를 포함한 리스트가 최대
+    #pre_df['con_len'] = pre_df['context'].apply(len)
+    #print(pre_df.loc[pre_df['con_len'].idxmax()])
+
+    print(pre_df['context'].iloc[:5])
+    ## 8. 리스트 원소들의 값들을 고유한 시퀀스로 생성(같은 데이터는 같은 시퀀스).
+    inputs = word_sequencing(pre_df)
 
 
     #print(pre_df[0:30]['conclusion'])
