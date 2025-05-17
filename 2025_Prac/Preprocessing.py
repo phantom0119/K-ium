@@ -1,15 +1,32 @@
 """
 - TrainCopySet.csv : 원본 데이터 Set
 -
+- tensorflow 사용 시 Python3.9 버전에서는 2.11.0 Version을 사용한다  -->  Module Import 오류가 발생한다.
+- python 3.9 버전의 pytorch 설치 명령 링크 : https://pytorch.org/get-started/locally/
 """
 import pandas as pd                         # DataFrame
 import re                                   # Regular Expression
+import torch, gc
+import tensorflow as tf
+import numpy as np
+import time
+import datetime
+import random
+from _cffi_backend import buffer
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import layers, Model
+from transformers import TFBertModel, BertConfig
 import nltk                                 # Word Tokenization
 from nltk.tokenize import word_tokenize     # 단어 자연어 토큰화
 from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
 from transformers import BertTokenizer
 #nltk.download('punkt_tab')     # LookupError, punkt resource download
 from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
+from sklearn.preprocessing import LabelEncoder
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from transformers import BertForSequenceClassification, BertConfig
+from torch.optim import AdamW
+from transformers import get_linear_schedule_with_warmup
 
 ## 토큰화 사전에 없는 용어 추가
 vocab = ['찢어지는', '촤측']
@@ -991,7 +1008,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape (Row 수, Column 수)
-        #if not  6001 <= i < 6191 : continue
+        if not 0 <= i < 150 : continue
 
         # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
         row = df.iloc[i]
@@ -1175,7 +1192,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_conc = []     # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        #if not 6191 <= i < 6211 : continue
+        if not 0 <= i < 150 : continue
 
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
@@ -1340,8 +1357,8 @@ def word_sequencing(df : pd.DataFrame):
     tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
     last_cus_id = max(tokenizer.vocab.values()) + 1     # BERT 모델의 vocab 가장 마지막 id 값 이후 번호로 부여.
     MAX_LEN = 285                                       # 확인된 리스트의 최대 원소 수 = 281개
-    sentences = df['context']
-    tokenized_sentences = []
+    sentences = df['context']                           # 토큰화할 리스트를 저장한 Column
+    tokenized_sentences = []                            # 시퀀스 결과를 저장할 List
 
     cnt = 0
     for sl in sentences:
@@ -1358,17 +1375,28 @@ def word_sequencing(df : pd.DataFrame):
             else:
                 cust_ids.append(id)
 
-        # BERT 입력 시 모든 시퀀스의 길이가 같아야 한다.
-        cust_ids = pad_sequences([cust_ids]         # 시퀀스 크기를 고정(285)하여 변환.
-                                , maxlen=MAX_LEN    # 출력 시퀀스 고정 길이
-                                , dtype="long"      # 정수형 시퀀스 데이터 타입
-                                , truncating="pre"  # 길이가 길면 앞에서부터 자름
-                                , padding="pre")    # 길이가 짧으면 앞에서부터 0을 채움
+        tokenized_sentences.append(cust_ids)
 
-        print(bert_words)
-        print(cust_ids)
-        cnt += 1
-        if cnt == 10: break
+    # BERT 입력 시 모든 시퀀스의 길이가 같아야 한다.
+    # 2D Type의 데이터를 파라미터로 반영해야 하므로 1차원 배열인 cust_ids에 []를 취하여 2차원으로 만든다.
+    tokenized_sentences = pad_sequences(tokenized_sentences         # 시퀀스 크기를 고정(285)하여 변환.
+                            , maxlen=MAX_LEN                        # 출력 시퀀스 고정 길이
+                            , dtype="long"                          # 정수형 시퀀스 데이터 타입
+                            , truncating="pre"                      # 길이가 길면 앞에서부터 자름
+                            , padding="pre")                        # 길이가 짧으면 앞에서부터 0을 채움
+    """
+        [[     0      0      0 ... 119569 119570    102]
+         [     0      0      0 ...  10135 119579    102]
+         [     0      0      0 ... 119588 119568    102]
+         [     0      0      0 ... 119572  14633    102]
+         [     0      0      0 ...  10321  22608    102]]
+    """
+    return tokenized_sentences
+        # 토큰화 테스팅(검사) 시 사용.
+        # print(bert_words)
+        # print(cust_ids)
+        # cnt += 1
+        # if cnt == 10: break
 
 
 
@@ -1403,6 +1431,225 @@ def sent_tokenizing(df : pd.DataFrame):
         # token_list.append(token_test)
 
 
+
+# Sequence 데이터의 [PAD] 구분을 위한 Attention Mask 데이터 생성 함수.
+# Parameter 'inputs'는 2차원 배열(numpy.ndarray)이므로 생성된 Attention mask도 2차원 배열 형태로 생성한다.
+# [PAD]에 해당하는 '0'은 0으로 마스킹, 이외는 1로 마스킹
+def attention_masking(inputs : list):
+
+    att_list = []           # return Attention mask list
+    for seq in inputs:
+        seq_mask = [float(i > 0) for i in seq]
+        att_list.append(seq_mask)
+
+    return att_list
+
+
+# GPU 또는 CPU 사용 가능한지 테스트 후 반환
+def Checking_cuda():
+      if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print('%d GPU(s) available.' % torch.cuda.device_count())
+            print('Can use the GPU:', torch.cuda.get_device_name(0))
+      else:
+            device = torch.device("cpu")
+            print('No GPU available, using the CPU instead.')
+
+      return device
+
+
+
+# 원본 데이터프레임의 행을 무작위 섞음.
+def Data_Random_Sampling(df : pd.DataFrame):
+      # reset_index = 뒤죽박죽된 이전의 인덱스를 초기화 시킴
+      df_shuffled = df.sample(frac=1).reset_index(drop=True)
+
+      Acute_DataFrame = df[df['class']==1]     # 참 판정 레코드 610
+      Non_Acute_DataFrame = df[df['class']==0] # 거짓 판정 레코드 5580
+
+      # 훈련용/테스트/검증으로 사용할 각 판정 결과의 데이터 개수
+      Acute_Train_len = int(len(Acute_DataFrame)*0.8)
+      Non_Train_len = int(len(Non_Acute_DataFrame)*0.8)
+      Acute_val_len = int(len(Acute_DataFrame)*0.1)
+      NoN_val_len = int(len(Non_Acute_DataFrame)*0.1)
+
+      # 훈련개수 = 4952,  테스트개수 = 619, 검증개수 = 619
+      train = pd.concat([Acute_DataFrame[:Acute_Train_len],
+                         Non_Acute_DataFrame[:Non_Train_len]])
+
+      test = pd.concat([Acute_DataFrame[Acute_Train_len:Acute_Train_len+Acute_val_len],
+                         Non_Acute_DataFrame[Non_Train_len:Non_Train_len+NoN_val_len]])
+
+      validation = pd.concat([Acute_DataFrame[Acute_Train_len + Acute_val_len:],
+                        Non_Acute_DataFrame[Non_Train_len + NoN_val_len:]])
+
+      print(f'뇌졸중 판정 데이터 개수: {len(Acute_DataFrame)}')
+      print(f'뇌졸중 아닌 데이터 개수: {len(Non_Acute_DataFrame)}')
+
+      return [train, test, validation]
+
+
+
+
+# 시간 표시 함수
+def format_time(elapsed):
+      # 반올림
+      elapsed_rounded = int(round((elapsed)))
+
+      # hh:mm:ss으로 형태 변경
+      return str(datetime.timedelta(seconds=elapsed_rounded))
+
+
+# 정확도 계산 함수
+def flat_accuracy(preds, labels):
+      pred_flat = np.argmax(preds, axis=1).flatten()
+      labels_flat = labels.flatten()
+
+      return np.sum(pred_flat == labels_flat) / len(labels_flat)
+
+
+'''
+Pytorch 학습 함수
+'''
+def Training(model, device, train_dataloader):
+      # GPU 환경변수 설정 (윈도우)
+      # set 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
+      # GPU 캐시 초기호
+      gc.collect()
+      torch.cuda.empty_cache()
+
+      # 옵티마이저
+      optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
+      # 에폭수
+      epochs = 4
+      # 총 훈련 스텝 : 배치반복 횟수 * 에폭  = 620
+      total_steps = len(train_dataloader) * epochs
+      # 스케줄러 생성
+      scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
+      # 랜덤시드 고정
+      seed = 55
+      torch.cuda.manual_seed_all(seed)  # GPU 모델 전부
+      torch.cuda.manual_seed(seed)
+      torch.manual_seed(seed) # CPU?
+      random.seed(seed)
+      np.random.seed(seed)
+
+      # 그래디언트(기울기) 초기화
+      # 가중치 편향에 대해 새로운 기울기 계산
+      model.zero_grad()
+
+      # 학습
+      for epoch_i in range(0, epochs):
+            print("")
+            print(f'##----- Epoch {epoch_i+1} / {epochs} -----##')
+            print('Training...')
+
+            # 시작 시간
+            start_time = time.time()
+            # 손실값 초기화
+            total_loss = 0
+            # 훈련 모드 설정
+            model.train()
+
+            # 데이터로더에서 배치만큼 반복해서 가져옴
+            for step, batch in enumerate(train_dataloader):
+                  # 경과 정보 표시
+                  if step % 100 == 0 and not step == 0:
+                        elapsed = format_time(time.time() - start_time)
+                        print('Batch {:>5,}  of  {:>5,}. Elapsed: {:}.'.format(step, len(train_dataloader), elapsed))
+
+                  # 배치를 device에 넣음
+                  batch = tuple(t.to(device) for t in batch)
+
+                  # 배치에서 데이터 추출
+                  b_input_ids, b_input_mask, b_labels = batch
+
+                  # Forward 수행
+                  outputs = model(b_input_ids,
+                                  token_type_ids=None,
+                                  attention_mask=b_input_mask,
+                                  labels=b_labels)
+
+                  # 손실(loss) 구함
+                  loss = outputs[0]
+                  # 총 로스 계산
+                  total_loss += loss.item()
+                  # Backward 수행으로 그래디언트 계산
+                  loss.backward()
+
+                  # 그래디언트 클리핑 (기울기 폭주 방지)
+                  torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+                  # 그래디언트를 통해 가중치 파라미터 업데이트
+                  optimizer.step()
+
+                  # 스케줄러로 학습률 감소
+                  scheduler.step()
+
+                  # 그래디언트 초기화
+                  model.zero_grad()
+
+            # 평균 로스 계산
+            avg_train_loss = total_loss / len(train_dataloader)
+
+            print("")
+            print("  Average training loss: {0:.2f}".format(avg_train_loss))
+            print("  Training epcoh took: {:}".format(format_time(time.time() - start_time)))
+
+            # ========================================
+            #               Validation
+            # ========================================
+            print("")
+            print("Running Validation...")
+
+            # 시작 시간
+            start_time = time.time()
+            # 평가 모드
+            model.eval()
+
+            # 초기화
+            eval_loss, eval_accuracy = 0, 0
+            nb_eval_steps, nb_eval_examples = 0, 0
+
+            # 데이터로더에서 배치만큼 반복해서 가져옴
+            for batch in validation_dataloader:
+                  # 배치를 device에 넣음
+                  batch = tuple(t.to(device) for t in batch)
+
+                  # 배치에서 데이터 추출
+                  b_input_ids, b_input_mask, b_labels = batch
+
+                  # 그래디언트 계산 안함
+                  with torch.no_grad():
+                        # Forward 수행
+                        outputs = model(b_input_ids,
+                                        token_type_ids=None,
+                                        attention_mask=b_input_mask)
+
+                  # 로스 구함
+                  logits = outputs[0]
+
+                  # CPU로 데이터 이동
+                  logits = logits.detach().cpu().numpy()
+                  label_ids = b_labels.to('cpu').numpy()
+
+                  # 출력 로짓과 라벨을 비교하여 정확도 계산
+                  tmp_eval_accuracy = flat_accuracy(logits, label_ids)
+                  eval_accuracy += tmp_eval_accuracy
+                  nb_eval_steps += 1
+
+            print("  Accuracy: {0:.2f}".format(eval_accuracy / nb_eval_steps))
+            print("  Validation took: {:}".format(format_time(time.time() - start_time)))
+
+      print("")
+      print("Training complete!")
+
+
+# 학습 모델 저장
+def Save_Model():
+      torch.save(model, '.\model_save_CPU.pt')
+      torch.save(model.state_dict(), '.\model_dict_save_CPU.pt')
+      print('##--- 학습 모델 저장 완료 ---##')
 
 
 if __name__ == '__main__':
@@ -1462,19 +1709,70 @@ if __name__ == '__main__':
 
     ## 6.Classification ('AcuteInfarction' Preprocessing)
     Acute_Classification(df, pre_df)
+    print(type(pre_df['class']))
 
     ## 7. Findings와 Conclusion의 토큰 리스트를 합쳐(extend) 1개의 Column으로 생성.
     pre_df['context'] = pre_df['finding'] + pre_df['conclusion']
     pre_df = pre_df.drop(columns=['finding', 'conclusion'])
+
+    # 정제한 데이터를 바탕으로 훈련, 테스트, 검증 DataFrame 구분 생성
+    train, test, validation = Data_Random_Sampling(pre_df.iloc[:150])
 
     # 토큰 리스트의 최대 크기 계산 목적
     # 281개의 원소를 포함한 리스트가 최대
     #pre_df['con_len'] = pre_df['context'].apply(len)
     #print(pre_df.loc[pre_df['con_len'].idxmax()])
 
-    print(pre_df['context'].iloc[:5])
     ## 8. 리스트 원소들의 값들을 고유한 시퀀스로 생성(같은 데이터는 같은 시퀀스).
-    inputs = word_sequencing(pre_df)
+    train_inputs = word_sequencing(train)
+    test_inputs = word_sequencing(test)
+
+    encoder = LabelEncoder()
+    train_labels = encoder.fit_transform(train['class'])
+    test_labels = encoder.fit_transform(test['class'])
+
+    # print(inputs[:5])
+    # print(type(inputs[1]))   # <class 'numpy.ndarray'>
+
+    ## 9. BERT Attention Mask 생성.
+    train_masks = attention_masking(train_inputs)
+    test_masks = attention_masking(test_inputs)
+
+    for i in range(10):
+        print(train_inputs[i])
+        print(train_masks[i])
+        print(train_labels[i])
+
+    device = Checking_cuda()
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    train_inputs = torch.tensor(train_inputs)
+    train_labels = torch.tensor(train_labels)
+    train_masks = torch.tensor(train_masks)
+    test_inputs = torch.tensor(test_inputs)
+    test_labels = torch.tensor(test_labels)
+    test_masks = torch.tensor(test_masks)
+
+    print(f"Dimension of tensor: {train_inputs.ndim}")  # ndim(차원) 확인
+    print(f"Shape of tensor: {train_inputs.shape}")  # shape(모양) 확인
+    print(f"Datatype of tensor: {train_inputs.dtype}")  # 자료형 확인
+    print(f"Device tensor is stored on: {train_inputs.device}")  # 어느 장치에 저장되는지 ex) gpu, cpu
+
+    batch_size = 4
+    '''
+    Dataset은 torch.utils.data.Dataset 의 하위 클래스.
+    DataLoader는 Dataset을 샘플에 쉽게 접근할 수 있도록 순회 가능한 객체(iterable)로 감쌉니다.
+    RandomSampler는 Dataset을 섞음.
+    '''
+    train_data = TensorDataset(train_inputs, train_masks, train_labels)
+    train_sampler = RandomSampler(train_data)
+    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
+
+    test_data = TensorDataset(test_inputs, test_masks, test_labels)
+    test_sampler = RandomSampler(test_data)
+    test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=batch_size)
+
+    model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-cased", num_labels=2)
+    model.cuda()
 
 
-    #print(pre_df[0:30]['conclusion'])
