@@ -32,6 +32,7 @@ from transformers import BertForSequenceClassification, BertConfig
 from torch.optim import AdamW
 import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
+from sklearn.metrics import roc_auc_score
 
 nltk.download('punkt')  # 구두점 분리가 학습된 모델
 nltk.download('stopwords')  # 불용어 사전
@@ -82,7 +83,7 @@ def empty_to_missing(df : pd.DataFrame) -> None:
     print(f"Conclusion 결측값 = {df['Conclusion'].isnull().sum()}")
 
     # 모든 결측값에 빈 문자열 대체
-    df.fillna('', inplace=True)
+    df.fillna('no-text', inplace=True)
     print("@@@@ 결측값(NaN)을 빈 문자열('') 처리한다. @@@@\n -- 처리 결과 -- ")
     # 결측치 처리 결과
     print(f"Findings 결측값 처리 후 = {df['Findings'].isnull().sum()}")
@@ -1028,7 +1029,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape (Row 수, Column 수)
-        #if not 0 <= i < 50 : continue
+        #if not 0 <= i < 30 : continue
 
         # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
         row = df.iloc[i]
@@ -1207,6 +1208,9 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         #         print('##############################################')
         #         break
         #     else: continue
+        # print(raw_data)
+        # print('-------' * 20)
+        # print(token_test)
 
 
         ##  15. 모든 Raw Data 탐색 결과를 저장 후 return.
@@ -1230,7 +1234,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     after_conc = []     # Conclusion Preprocesing List
 
     for i in range(df.shape[0]) :   # shape() = (Row 수, Column 수)
-        #if not 0 <= i < 150 : continue
+        #if not 0 <= i < 30 : continue
 
         row = df.iloc[i]
         Ctext = ' '.join(map(str, row['Conclusion'].split('\n'))).strip()
@@ -1331,6 +1335,7 @@ def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
     :return: None
     """
     for i in range(df.shape[0]):
+        #if not 0 <= i < 30 : continue
         row = df.iloc[i]
         Atext = int(str(row['AcuteInfarction']).strip())
         redf.loc[i, 'class'] = Atext
@@ -1412,7 +1417,7 @@ def reorg_wordpieces(tokens : list):
 ## 리스트에 있는 단어 원소들을 하나의 고유한 시퀀스로 변환
 # 만약 BERT 모델의 사전(vocab)에 없는 단어인 경우에는 사용자 사전(custom_token_id)을 통해 고유 시퀀스를 추가한다.
 def word_sequencing(df : pd.DataFrame):
-    MAX_LEN = 335                                       # 확인된 리스트의 최대 원소 수 = 332개
+    MAX_LEN = 256                                       # 확인된 리스트의 최대 원소 수 = 218개
     sentences = df['context']                           # 토큰화할 리스트를 저장한 Column
     tokenized_sentences = []                            # 시퀀스 결과를 저장할 List
 
@@ -1421,11 +1426,15 @@ def word_sequencing(df : pd.DataFrame):
         input_ids = tokenizer_bert.convert_tokens_to_ids(bert_words)    # pretrained 모델을 바탕으로 단어 시퀀스 변환.
 
         cust_ids = []
+        prev_id = None                                              # 이전 토큰 ID, [SEP]가 연달아 존재할 때 제거 목적.
         for tk, id in zip(bert_words, input_ids):                   # id 값이 100인 경우 = [UNK] 토큰 = 사용자 지정 시퀀스 부여 필요.
             if id == tokenizer_bert.unk_token_id:
                 if tk not in tokenizer_bert.get_vocab():            # 토큰(단어)가 사용자 사전에 없는 경우 추가하여 시퀀스 부여.
                     tokenizer_bert.add_tokens(tk)
+            elif prev_id == tokenizer_bert.sep_token_id and id == tokenizer_bert.sep_token_id:
+                continue
             cust_ids.append(tokenizer_bert.convert_tokens_to_ids(tk))
+            prev_id = id
 
         tokenized_sentences.append(cust_ids)
 
@@ -1487,21 +1496,24 @@ def Data_Random_Sampling(df : pd.DataFrame):
     # reset_index = 뒤죽박죽된 이전의 인덱스를 초기화 시킴
     df_shuffled = df.sample(frac=1).reset_index(drop=True)
 
-    Acute_DataFrame = df[df['class']==1]     # 참 판정 레코드 610
-    Non_Acute_DataFrame = df[df['class']==0] # 거짓 판정 레코드 5580
-
-    # 훈련용/테스트/검증으로 사용할 각 판정 결과의 데이터 개수 (실제 학습 시에는 Trainset 전부 학습)
-    Acute_Train_len = int(len(Acute_DataFrame)*1.0)
-    Non_Train_len = int(len(Non_Acute_DataFrame)*1.0)
-    Acute_val_len = int(len(Acute_DataFrame)*0.1)
-    NoN_val_len = int(len(Non_Acute_DataFrame)*0.1)
-
-    # 훈련개수 = 5571,  테스트개수 = 619
-    train = pd.concat([Acute_DataFrame[:Acute_Train_len],
-                         Non_Acute_DataFrame[:Non_Train_len]])      # 549 + 5022 = 5571
-
-    test = pd.concat([Acute_DataFrame[30:30+Acute_val_len],
-                      Non_Acute_DataFrame[30:30+NoN_val_len]])    # 테스트 목적으로 임의 사용.
+    # Acute_DataFrame = df[df['class']==1]     # 참 판정 레코드 610
+    # Non_Acute_DataFrame = df[df['class']==0] # 거짓 판정 레코드 5580
+    #
+    # # 훈련용/테스트/검증으로 사용할 각 판정 결과의 데이터 개수 (실제 학습 시에는 Trainset 전부 학습)
+    # Acute_Train_len = int(len(Acute_DataFrame)*1.0)
+    # Non_Train_len = int(len(Non_Acute_DataFrame)*1.0)
+    # Acute_val_len = int(len(Acute_DataFrame)*0.1)
+    # NoN_val_len = int(len(Non_Acute_DataFrame)*0.1)
+    #
+    # # 훈련개수 = 5571,  테스트개수 = 619
+    # train = pd.concat([Acute_DataFrame[:Acute_Train_len],
+    #                      Non_Acute_DataFrame[:Non_Train_len]])      # 549 + 5022 = 5571
+    #
+    # test = pd.concat([Acute_DataFrame[30:30+Acute_val_len],
+    #                   Non_Acute_DataFrame[30:30+NoN_val_len]])    # 테스트 목적으로 임의 사용.
+    #
+    # train.reset_index(drop=True)
+    # test.reset_index(drop=True)
 
       # test = pd.concat([Acute_DataFrame[Acute_Train_len:Acute_Train_len+Acute_val_len],
       #                    Non_Acute_DataFrame[Non_Train_len:Non_Train_len+NoN_val_len]])     # 61 + 558 = 619
@@ -1509,8 +1521,11 @@ def Data_Random_Sampling(df : pd.DataFrame):
       # validation = pd.concat([Acute_DataFrame[Acute_Train_len + Acute_val_len:],
       #                   Non_Acute_DataFrame[Non_Train_len + NoN_val_len:]])
 
-    print(f'뇌졸중 판정 데이터 개수: {len(Acute_DataFrame)}')
-    print(f'뇌졸중 아닌 데이터 개수: {len(Non_Acute_DataFrame)}')
+    # print(f'뇌졸중 판정 데이터 개수: {len(Acute_DataFrame)}')
+    # print(f'뇌졸중 아닌 데이터 개수: {len(Non_Acute_DataFrame)}')
+
+    train = df
+    test = df.iloc[30:100]
 
     return [train, test]
 
@@ -1577,7 +1592,7 @@ if __name__ == '__main__':
     #print(type(pre_df['class']))
 
     ## 7. Findings와 Conclusion의 토큰 리스트를 합쳐(extend) 1개의 Column으로 생성.
-    pre_df['context'] = pre_df['finding'] + pre_df['conclusion']
+    pre_df['context'] = pre_df.apply(lambda row: row['finding'] + row['conclusion'], axis=1)
     pre_df = pre_df.drop(columns=['finding', 'conclusion'])
 
     # 정제한 데이터를 바탕으로 훈련, 테스트, 검증 DataFrame 구분 생성
@@ -1585,8 +1600,8 @@ if __name__ == '__main__':
 
     # 토큰 리스트의 최대 크기 계산 목적
     # 281개의 원소를 포함한 리스트가 최대
-    #pre_df['con_len'] = pre_df['context'].apply(len)
-    #print(pre_df.loc[pre_df['con_len'].idxmax()])
+    pre_df['con_len'] = pre_df['context'].apply(len)
+    print(pre_df.loc[pre_df['con_len'].idxmax()])
 
     # 8. 리스트 원소들의 값들을 고유한 시퀀스로 생성(같은 데이터는 같은 시퀀스).
     train_inputs = word_sequencing(train)
@@ -1597,15 +1612,17 @@ if __name__ == '__main__':
     test_labels = encoder.fit_transform(test['class'])
     #print(type(test_labels[1]))   # <class 'numpy.ndarray'>
 
-    ## 9. BERT Attention Mask 생성.
+    # 9. BERT Attention Mask 생성.
     train_masks = attention_masking(train_inputs)
     test_masks = attention_masking(test_inputs)
 
-    for i in range(15, 30):
-        print(pre_df['context'].iloc[i])
+    for i in range(0, 30):
+        print(pre_df.loc[i, 'context'])
         print(train_inputs[i])
-        print(train_masks[i])
+        print(tokenizer_bert.convert_ids_to_tokens(train_inputs[i]))
+        #print(train_masks[i])
         print(train_labels[i])
+        print()
 
     device = Checking_cuda()
     #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1706,13 +1723,13 @@ if __name__ == '__main__':
         print(f'평균 loss = {avg_train_loss}')
 
     # 경로 설정
-    model_save_path = './saved_bert_model_2'
+    model_save_path = '../../saved_bert_model_3'
 
     # 모델 저장
     model.save_pretrained(model_save_path)
     tokenizer_bert.save_pretrained(model_save_path)
 
-    model = BertForSequenceClassification.from_pretrained("saved_bert_model_2")
+    model = BertForSequenceClassification.from_pretrained(model_save_path)
     model.to(device)
 
     # 평가 모드
@@ -1755,3 +1772,4 @@ if __name__ == '__main__':
     print(classification_report(true_labels, predictions, digits=4))
     print("\n[정확도]")
     print("Accuracy:", accuracy_score(true_labels, predictions))
+    print(f"AUC: {round(roc_auc_score(predictions, true_labels), 6)}")

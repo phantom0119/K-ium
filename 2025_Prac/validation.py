@@ -6,14 +6,16 @@
 
 import pandas as pd
 import torch
+import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from transformers import BertForSequenceClassification
 import Preprocessing as pr
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
 
 
-model = BertForSequenceClassification.from_pretrained("saved_bert_model_2")
+model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_3")
 device = pr.Checking_cuda()
 model.to(device)
 
@@ -49,7 +51,7 @@ test_inputs = torch.tensor(test_inputs).long()
 test_labels = torch.tensor(test_labels).long()
 test_masks = torch.tensor(test_masks).long()
 
-batch_size = 16  # 또는 32 등 원하는 배치 크기
+batch_size = 32  # 또는 32 등 원하는 배치 크기
 
 
 # 평가 모드
@@ -59,39 +61,39 @@ test_data = TensorDataset(test_inputs, test_masks, test_labels)
 test_sampler = SequentialSampler(test_data)  # 순차적으로 순회 (정답 순서 보장)
 test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=batch_size)
 
+pred_list = []; label_list = []
 
-predictions = []
-true_labels = []
+for idx, batches in enumerate(test_dataloader):
+    # batch 정보를 device에 넣음
+    batch = tuple(batch_val.to(device) for batch_val in batches)
+    # batch에서 input_ids, attention_mask, label 추출
+    input_ids, input_mask, labels = batch
 
-with torch.no_grad():
-    for batch in test_dataloader:
-        b_input_ids = batch[0].to(device).long()
-        b_attention_mask = batch[1].to(device).long()
-        b_labels = batch[2].to(device).long()
+    # Grad 계산 안함
+    with torch.no_grad():
+        # (input_ids에 대한 예측 결과 [0일 수치, 1일 수치]로 표현 -> logits[0]
+        logits = model(input_ids, token_type_ids=None, attention_mask=input_mask)
 
-        outputs = model(
-            input_ids=b_input_ids,
-            attention_mask=b_attention_mask
-        )
+    preds = logits[0]
 
-        logits = outputs.logits
-        preds = torch.argmax(logits, dim=1).cpu().numpy()
-        labels = b_labels.cpu().numpy()
+    # GPU를 사용했다면 예측 결과와 정답지 CUDA Tensor를 CPU로 변환
+    if device.type == 'cuda':
+        preds = preds.to('cpu').numpy()
+        labels = labels.to('cpu').numpy()
 
-        predictions.extend(preds)
-        true_labels.extend(labels)
+    # 두 값중 큰 값을 예측 결과로 두고, 펼침
+    pred_flat = np.argmax(preds, axis=1).flatten()
+    pred_list.extend(pred_flat)
+    # 정답 라벨 (비교용)
+    label_list.extend(labels)
 
-# 3. 예측 결과 비교
-for pred, true in zip(predictions, true_labels):
-    print(f"예측: {pred}, 실제: {true}")
+# 예측값(pred_list)과 정답지(label_list)를 AUROC 계산
+fpr, tpr, thresholds = roc_curve(pred_list, label_list)
+# AUC 면적
+print(f"정확도(Accuracy): {round(roc_auc_score(pred_list, label_list),6)}")
 
-
-# 선택적으로 성능 평가
-from sklearn.metrics import classification_report, accuracy_score
-
-print(classification_report(true_labels, predictions, digits=4))
-print("\n[정확도]")
-print("Accuracy:", accuracy_score(true_labels, predictions))
-
-print('\n[C-statistic]')
-print('AUC: ', roc_auc_score(true_labels, predictions))
+# ROC 곡선
+# plt.plot(fpr, tpr)
+# plt.xlabel('FP Rate')
+# plt.ylabel('TP Rate')
+# plt.show()

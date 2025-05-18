@@ -1,5 +1,5 @@
 import pandas as pd   # 2차원 Vector
-import re             # 정규 표현삭
+import re             # 정규 표현식
 from transformers import BertTokenizer # BERT 토크나이저 모델 활용
 import nltk  # 자연어 처리
 from nltk.tokenize import sent_tokenize # 문장 자연어 토큰화
