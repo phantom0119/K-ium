@@ -213,7 +213,7 @@ Pytorch 학습 함수
 def Training(model, device, train_dataloader):
       # GPU 환경변수 설정 (윈도우)
       # set 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
-      # GPU 캐시 초기호
+      # GPU 캐시 초기화
       gc.collect()
       torch.cuda.empty_cache()
 

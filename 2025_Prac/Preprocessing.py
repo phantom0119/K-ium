@@ -3,12 +3,18 @@
 -
 - tensorflow 사용 시 Python3.9 버전에서는 2.11.0 Version을 사용한다  -->  Module Import 오류가 발생한다.
 - python 3.9 이상의 버전에서 pytorch 설치 명령 링크 : https://pytorch.org/get-started/locally/
+- 학습용 데이터셋은 'TrainSet _1차.csv', 검증(테스트) 데이터셋은 'ValidationSet_2차.csv'를 사용.
+
+- AdamW optimizer Learning late별 차이 (정확도 검증은 C-statistic)
+  1. 1e-5  : validation set에서 95%
+  2. 2e-5  :
 """
 import pandas as pd                         # DataFrame
 import re                                   # Regular Expression
 import torch, gc
-import tensorflow as tf
+from transformers import BertTokenizer
 import numpy as np
+import tensorflow as tf
 import time
 import datetime
 import random
@@ -18,7 +24,6 @@ from transformers import TFBertModel, BertConfig
 import nltk                                 # Word Tokenization
 from nltk.tokenize import word_tokenize     # 단어 자연어 토큰화
 from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
-from transformers import BertTokenizer
 #nltk.download('punkt_tab')     # LookupError, punkt resource download
 from tensorflow.keras.preprocessing.sequence import pad_sequences  #Keras 시퀀스
 from sklearn.preprocessing import LabelEncoder
@@ -28,7 +33,11 @@ from torch.optim import AdamW
 import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
 
-## 토큰화 사전에 없는 용어 추가
+nltk.download('punkt')  # 구두점 분리가 학습된 모델
+nltk.download('stopwords')  # 불용어 사전
+
+## 토큰화 사전에 없는 용어(UNK) 추가
+#  이후에도 Token Embedding 작업에 사용.
 vocab = ['찢어지는', '촤측']
 tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 tokenizer_bert.add_tokens(vocab)
@@ -42,7 +51,7 @@ stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
 
 ## BERT 토큰화 작업 시, [UNK] 토큰에 대한 고유 시퀀스 반영 목적의 사용자 사전.
-custom_token_id = {}
+#custom_token_id = {}
 
 
 ## DataFrame 'info' 출력.
@@ -91,8 +100,8 @@ def Mask_Repl(match : re.Match) -> str:
     :return: token text(string) to replace the matched text.
     """
     token = f"__PROTECT{len(mask_matches)}__"
-    mask_matches.append((token, match.group(0)))                # 정규표현식으로 매칭된 텍스트 원본과 변환(__PROTECT10__ 등)된 값을 저장.
-    return token                                                # 변환된 값이 문자열 원문에 반영될 수 있도록 변환 값 리턴.
+    mask_matches.append((token, match.group(0)))    # 정규표현식으로 매칭된 텍스트 원본과 변환(__PROTECT10__ 등)된 값을 저장.
+    return token                                    # 변환된 값이 문자열 원문에 반영될 수 있도록 변환 값 리턴.
 
 
 
@@ -416,6 +425,17 @@ def medical_words_preprocessing(text : str) -> str :
     :param text: Medical impression string data (Findings, Conclusion).
     :return: Converted string data.
     """
+    # "Axial T1WI, sagittal T1WI, axial T2WI, axial FLAIR, axial T2* GRE image 획득하였으며 조영증강을 시행함/시행하지 않음." 내용 제거.
+    # 어떤 검사를 시행함 또는 시행하지 않음과 관련된 모든 항목을 제거 (검사를 시행하고 시행하지 않고는 뇌졸중 판단의 근거로 볼 수 없다.)
+    text = re.sub(r'(Axial (T1WI|DWI)|Intracranial TOF MRA|Axial T2\*|Neck MRA)[, ]*(sagittal T1WI)?[, ]*(axial T2WI)?[, ]*(axial FLAIR)?[, ]*'
+                         r'(axial T2\*)?[, ]*(GRE image)?[, ]*(axial DWI)?[, ]*(intracranial TOF MRA)?[, ]*'
+                         r'(neck TOF MRA)?[, ]*.*조영증강[은을 ]+시행(함|하지 않았?음)\.?|'
+                         r'White matter tract evaluation.*diffusion tensor imaging 시행(함|하지 않았?음)|'
+                         r'(MR brain venography|PC3D Brain MR venography).*시행(함|하지 않았?음)'
+                  ,' '
+                  , text
+                  , flags=re.IGNORECASE)
+
     text = re.sub(r'([nN]o\s)((?!at )\w+)(?:(?=\s|\.|\,|$))', r' \1-\2 ', text)                 # No + 용어를 1개의 토큰으로 만듦.
     text = re.sub(r'([sS]tage)\s*(\d+)[,. ]+', r' \1-\2 ', text)                                # stage 3,
     text = re.sub(r'\(CE\)', ' contrast-enhancement ', text)                                    # (CE)
@@ -1008,13 +1028,24 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     raw_find = []                   # Findings Raw Data List
     after_find = []                 # Findings Preprocessing List
     for i in range(df.shape[0]) :   # shape (Row 수, Column 수)
-        #if not 0 <= i < 150 : continue
+        #if not 0 <= i < 50 : continue
 
         # 줄 바꿈(\n, line-feed), 커서 이동(\r, carriage-return)이 포함된 문자열을 한 줄에 모두 맞추도록 변환.
         row = df.iloc[i]
         Ftext = ' '.join(map(str, row['Findings'].split('\n'))).strip()
         Ftext = Ftext.replace('\r', ' ')
         raw_data = Ftext
+
+        ##  xx. 먼저 문장을 구분할 수 있도록 토큰 추가 ([CLS], [SEP])
+        sentences = sent_tokenize(Ftext)    # text를 tokenizing한 문장.
+
+        Bert_sentences = " "
+        for s in sentences:
+            Bert_sentences += s + " __SEP__ "       # 중간에 '[', ']' 기호는 전처리되므로 '__'로 먼저 구분.
+
+        Ftext = Bert_sentences
+        # print(f"문장 구분 토큰 추가 인덱스 : {i}\n{Ftext}")
+        # print()
 
         ##  1. 의학 용어 정형화 작업.
         Ftext = medical_words_preprocessing(Ftext)
@@ -1152,6 +1183,10 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ftext = unnecessary_preprocessing(Ftext)
 
 
+        ##  x. '__SEP__' 토큰을 BERT 형식에 맞게 '[SEP]'로 변환  --> 대소문자 구분함.
+        Ftext = re.sub(r'__SEP__', r'[SEP]', Ftext)
+        Ftext = re.sub(r'\[SEP\]\s+\[SEP\]', r'[SEP]', Ftext)
+
         ##  14. 문자열 토큰화 작업.
         token_test = tokenizer_bert.tokenize(Ftext)     # 전처리한 소견을 토큰화
         token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
@@ -1160,15 +1195,18 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         ## x. 2회 이상의 띄어쓰기 또는 줄바꿈 문자에 대해 한 번의 줄바꿈만 적용.
         #Ftext = re.sub(r'\s{2,20}', ' ', Ftext)
 
-        #if re.search(r'SIH score', raw_data, re.IGNORECASE):
-            # print('##############################################')
-            # print(f'## {i}_idx ##')
-            # print(raw_data)
-            # print('-------' * 20)
-            #print(Ftext)
-            # print('-------' * 20)
-            # print(token_test)
-            # print('##############################################')
+        # for t in token_test:
+        #     if t in ['시행함', '시행하지']:
+        #         print('##############################################')
+        #         print(f'## {i}_idx ##')
+        #         print(raw_data)
+        #         print('-------' * 20)
+        #         print(Ftext)
+        #         print('-------' * 20)
+        #         print(token_test)
+        #         print('##############################################')
+        #         break
+        #     else: continue
 
 
         ##  15. 모든 Raw Data 탐색 결과를 저장 후 return.
@@ -1199,6 +1237,15 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         Ctext = Ctext.replace('\r', '')
         raw_data = Ctext
 
+        ##  xx. 먼저 문장을 구분할 수 있도록 토큰 추가 ([CLS], [SEP])
+        sentences = sent_tokenize(Ctext)  # text를 tokenizing한 문장.
+
+        Bert_sentences = " "
+        for s in sentences:
+            Bert_sentences += s + " __SEP__ "  # 중간에 '[', ']' 기호는 전처리되므로 '__'로 먼저 구분.
+
+        Ctext = Bert_sentences
+
 
         ##  1. 의학 용어 정형화 작업.
         Ctext = medical_words_preprocessing(Ctext)
@@ -1228,6 +1275,10 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         ##  8. 비율(%) 데이터 전처리 작업.
         Ctext = re.sub(r'(\d+)\s*\%', r' percent-\1 ', Ctext)  # 10%  --> percent-10
 
+        ##  x. '__SEP__' 토큰을 BERT 형식에 맞게 '[SEP]'로 변환  --> 대소문자 구분함.
+        Ctext = re.sub(r'__SEP__', r'[SEP]', Ctext)
+        Ctext = re.sub(r'\[SEP\]\s+\[SEP\]', r'[SEP]', Ctext)
+
         ##  9. 문자열 토큰화 작업.
         token_test = tokenizer_bert.tokenize(Ctext)     # 전처리한 소견을 토큰화
         token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
@@ -1238,7 +1289,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         # print(f'## {i}_idx ##')
         # print(raw_data)
         # print('-------' * 20)
-        # print(Ftext)
+        # print(Ctext)
         # print('-------' * 20)
         # print(token_test)
         # print('##############################################')
@@ -1252,7 +1303,7 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
     return raw_conc, after_conc
 
 
-# 테스트 목적의 csv 파일 반환.
+## 테스트 목적의 csv 파일 반환.
 # Raw_Text : 텍스트 데이터 원본.
 # After_Text : Preprocessing 결과 텍스트.
 def Get_DataFrame_to_CSV(raw_txt, af_txt):
@@ -1271,7 +1322,7 @@ def Get_DataFrame_to_CSV(raw_txt, af_txt):
 
 
 
-# 분류(class-정답지) 데이터를 정수 값으로 변경.
+## 분류(class-정답지) 데이터를 정수 값으로 변경.
 def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
     """
     Convert the data in the classification column(AcuteInfarction) to integers.
@@ -1285,7 +1336,7 @@ def Acute_Classification(df : pd.DataFrame, redf : pd.DataFrame) :
         redf.loc[i, 'class'] = Atext
 
 
-# '##', '-'로 토큰이 분리된 용어를 재결합.
+## embbeding 결과에서 '##', '-'로 토큰이 분리된 용어를 재결합.
 def merge_wordpieces(tokens : list):
     """
     Recombine terms that are split into tokens by '##' or '-' into a single word.
@@ -1310,18 +1361,24 @@ def merge_wordpieces(tokens : list):
     return words
 
 
-# 불용어(and, the, 그, at 등) 제거 및 영문+한글('edema로', 'CTA를') 조합에서 불필요한 한글 제거.
+## 불용어(and, the, 그, at 등) 제거 및 영문+한글('edema로', 'CTA를') 조합에서 불필요한 한글 제거.
 def reorg_wordpieces(tokens : list):
     """
     Remove stopwords and preprocess words that combine English and Korean characters.
     :param tokens: A list of words split for tokenizaation.
     :return: A list of preprocessed words.
     """
+    # 모든 토큰을 소문자 변환
     filtered_words = [tk.lower() for tk in tokens if tk.lower() not in stopwords]
+
     for idx, token in enumerate(filtered_words):
+        # 변환된 토큰 중 BERT 구분자 [SEP]는 대문자로 변환.
+        if re.search(r'\[sep\]', token):
+            token = '[SEP]'
+
         if re.search(r'[가-힣]', token) and re.search(r'[a-zA-Z-]', token):
             token = re.sub(r'[^a-zA-Z-]', '', token)                                # 영어 + 한글 조합의 토큰에서 한글 제거
-            filtered_words[idx] = token
+            #filtered_words[idx] = token
 
         # 한글 표현에서 "[용어]의", "[용어]로" 등의 형태로 토큰화될 수 있는 표현 전처리
         if re.search(r'[가-힣]+([의에은을인이과]|으로)$', token):
@@ -1347,38 +1404,33 @@ def reorg_wordpieces(tokens : list):
         elif token == '임':                  token = '있다'               # 임 -> 이다 -> 있다
         elif token in ['분', '환자', 'pt']:   token = 'patient'           # 분 (시간 단위는 전처리해서 삭제되었음을 전제로 둠) -> 사람 -> 환자
         filtered_words[idx] = token
+
     return filtered_words
 
 
 
-# 리스트에 있는 단어 원소들을 하나의 고유한 시퀀스로 변환
+## 리스트에 있는 단어 원소들을 하나의 고유한 시퀀스로 변환
 # 만약 BERT 모델의 사전(vocab)에 없는 단어인 경우에는 사용자 사전(custom_token_id)을 통해 고유 시퀀스를 추가한다.
 def word_sequencing(df : pd.DataFrame):
-    # tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
-    # last_cus_id = max(tokenizer.vocab.values()) + 1     # BERT 모델의 vocab 가장 마지막 id 값 이후 번호로 부여.
-    MAX_LEN = 285                                       # 확인된 리스트의 최대 원소 수 = 281개
+    MAX_LEN = 335                                       # 확인된 리스트의 최대 원소 수 = 332개
     sentences = df['context']                           # 토큰화할 리스트를 저장한 Column
     tokenized_sentences = []                            # 시퀀스 결과를 저장할 List
 
-    cnt = 0
     for sl in sentences:
-        bert_words = ['[CLS]'] + sl + ['[SEP]']                         # BERT 토큰화를 위해 시점과 종점 구분자 추가.
+        bert_words = ['[CLS]'] + sl                                     # BERT 토큰화를 위해 시점 구분 토큰 추가.
         input_ids = tokenizer_bert.convert_tokens_to_ids(bert_words)    # pretrained 모델을 바탕으로 단어 시퀀스 변환.
 
         cust_ids = []
         for tk, id in zip(bert_words, input_ids):                   # id 값이 100인 경우 = [UNK] 토큰 = 사용자 지정 시퀀스 부여 필요.
             if id == tokenizer_bert.unk_token_id:
-                if tk not in tokenizer_bert.get_vocab():                       # 토큰(단어)가 사용자 사전에 없는 경우 추가하여 시퀀스 부여.
+                if tk not in tokenizer_bert.get_vocab():            # 토큰(단어)가 사용자 사전에 없는 경우 추가하여 시퀀스 부여.
                     tokenizer_bert.add_tokens(tk)
-                    #custom_token_id[tk] = last_cus_id
-                    #last_cus_id += 1
-                #cust_ids.append(custom_token_id[tk])
             cust_ids.append(tokenizer_bert.convert_tokens_to_ids(tk))
 
         tokenized_sentences.append(cust_ids)
 
     # BERT 입력 시 모든 시퀀스의 길이가 같아야 한다.
-    # 2D Type의 데이터를 파라미터로 반영해야 하므로 1차원 배열인 cust_ids에 []를 취하여 2차원으로 만든다.
+    # 2D Type의 데이터를 파라미터로 사용.
     tokenized_sentences = pad_sequences(tokenized_sentences         # 시퀀스 크기를 고정(285)하여 변환.
                             , maxlen=MAX_LEN                        # 출력 시퀀스 고정 길이
                             , dtype="long"                          # 정수형 시퀀스 데이터 타입
@@ -1392,31 +1444,31 @@ def word_sequencing(df : pd.DataFrame):
          [     0      0      0 ...  10321  22608    102]]
     """
     return tokenized_sentences
-        # 토큰화 테스팅(검사) 시 사용.
-        # print(bert_words)
-        # print(cust_ids)
-        # cnt += 1
-        # if cnt == 10: break
 
 
 
-# Sequence 데이터의 [PAD] 구분을 위한 Attention Mask 데이터 생성 함수.
+
+## Sequence 데이터의 [PAD] 구분을 위한 Attention Mask 데이터 생성 함수.
 # Parameter 'inputs'는 2차원 배열(numpy.ndarray)이므로 생성된 Attention mask도 2차원 배열 형태로 생성한다.
 # [PAD]에 해당하는 '0'은 0으로 마스킹, 이외는 1로 마스킹
 def attention_masking(inputs : list):
-
-    att_list = []           # return Attention mask list
+    """
+    Mask the value '0' corresponding to [PAD] as 0, and all others as 1.
+    :param inputs: A list of tokenized test(string).
+    :return: Attention mask list.
+    """
+    att_list = []                                   # return Attention mask list
     for seq in inputs:
-        seq_mask = [float(i > 0) for i in seq]
+        seq_mask = [float(i > 0) for i in seq]      # [PAD] = 0, else = 1
         att_list.append(seq_mask)
 
     return att_list
 
 
-# GPU 또는 CPU 사용 가능한지 테스트 후 반환
+## GPU 또는 CPU 사용 가능한지 테스트 후 반환
 def Checking_cuda():
-    print(torch.__version__)  # PyTorch 버전
-    print(torch.version.cuda)  # 내장된 CUDA 버전
+    print(torch.__version__)        # PyTorch 버전
+    print(torch.version.cuda)       # 내장된 CUDA 버전
     if torch.cuda.is_available():
         device = torch.device("cuda")
         print('%d GPU(s) available.' % torch.cuda.device_count())
@@ -1432,32 +1484,35 @@ def Checking_cuda():
 
 # 원본 데이터프레임의 행을 무작위 섞음.
 def Data_Random_Sampling(df : pd.DataFrame):
-      # reset_index = 뒤죽박죽된 이전의 인덱스를 초기화 시킴
-      df_shuffled = df.sample(frac=1).reset_index(drop=True)
+    # reset_index = 뒤죽박죽된 이전의 인덱스를 초기화 시킴
+    df_shuffled = df.sample(frac=1).reset_index(drop=True)
 
-      Acute_DataFrame = df[df['class']==1]     # 참 판정 레코드 610
-      Non_Acute_DataFrame = df[df['class']==0] # 거짓 판정 레코드 5580
+    Acute_DataFrame = df[df['class']==1]     # 참 판정 레코드 610
+    Non_Acute_DataFrame = df[df['class']==0] # 거짓 판정 레코드 5580
 
-      # 훈련용/테스트/검증으로 사용할 각 판정 결과의 데이터 개수
-      Acute_Train_len = int(len(Acute_DataFrame)*0.9)
-      Non_Train_len = int(len(Non_Acute_DataFrame)*0.9)
-      Acute_val_len = int(len(Acute_DataFrame)*0.1)
-      NoN_val_len = int(len(Non_Acute_DataFrame)*0.1)
+    # 훈련용/테스트/검증으로 사용할 각 판정 결과의 데이터 개수 (실제 학습 시에는 Trainset 전부 학습)
+    Acute_Train_len = int(len(Acute_DataFrame)*1.0)
+    Non_Train_len = int(len(Non_Acute_DataFrame)*1.0)
+    Acute_val_len = int(len(Acute_DataFrame)*0.1)
+    NoN_val_len = int(len(Non_Acute_DataFrame)*0.1)
 
-      # 훈련개수 = 5571,  테스트개수 = 619
-      train = pd.concat([Acute_DataFrame[:Acute_Train_len],
+    # 훈련개수 = 5571,  테스트개수 = 619
+    train = pd.concat([Acute_DataFrame[:Acute_Train_len],
                          Non_Acute_DataFrame[:Non_Train_len]])      # 549 + 5022 = 5571
 
-      test = pd.concat([Acute_DataFrame[Acute_Train_len:Acute_Train_len+Acute_val_len],
-                         Non_Acute_DataFrame[Non_Train_len:Non_Train_len+NoN_val_len]])     # 61 + 558 = 619
+    test = pd.concat([Acute_DataFrame[30:30+Acute_val_len],
+                      Non_Acute_DataFrame[30:30+NoN_val_len]])    # 테스트 목적으로 임의 사용.
+
+      # test = pd.concat([Acute_DataFrame[Acute_Train_len:Acute_Train_len+Acute_val_len],
+      #                    Non_Acute_DataFrame[Non_Train_len:Non_Train_len+NoN_val_len]])     # 61 + 558 = 619
 
       # validation = pd.concat([Acute_DataFrame[Acute_Train_len + Acute_val_len:],
       #                   Non_Acute_DataFrame[Non_Train_len + NoN_val_len:]])
 
-      print(f'뇌졸중 판정 데이터 개수: {len(Acute_DataFrame)}')
-      print(f'뇌졸중 아닌 데이터 개수: {len(Non_Acute_DataFrame)}')
+    print(f'뇌졸중 판정 데이터 개수: {len(Acute_DataFrame)}')
+    print(f'뇌졸중 아닌 데이터 개수: {len(Non_Acute_DataFrame)}')
 
-      return [train, test]
+    return [train, test]
 
 
 
@@ -1519,7 +1574,7 @@ if __name__ == '__main__':
 
     ## 6.Classification ('AcuteInfarction' Preprocessing)
     Acute_Classification(df, pre_df)
-    print(type(pre_df['class']))
+    #print(type(pre_df['class']))
 
     ## 7. Findings와 Conclusion의 토큰 리스트를 합쳐(extend) 1개의 Column으로 생성.
     pre_df['context'] = pre_df['finding'] + pre_df['conclusion']
@@ -1533,7 +1588,7 @@ if __name__ == '__main__':
     #pre_df['con_len'] = pre_df['context'].apply(len)
     #print(pre_df.loc[pre_df['con_len'].idxmax()])
 
-    ## 8. 리스트 원소들의 값들을 고유한 시퀀스로 생성(같은 데이터는 같은 시퀀스).
+    # 8. 리스트 원소들의 값들을 고유한 시퀀스로 생성(같은 데이터는 같은 시퀀스).
     train_inputs = word_sequencing(train)
     test_inputs = word_sequencing(test)
 
@@ -1546,10 +1601,11 @@ if __name__ == '__main__':
     train_masks = attention_masking(train_inputs)
     test_masks = attention_masking(test_inputs)
 
-    # for i in range(10):
-    #     print(train_inputs[i])
-    #     print(train_masks[i])
-    #     print(train_labels[i])
+    for i in range(15, 30):
+        print(pre_df['context'].iloc[i])
+        print(train_inputs[i])
+        print(train_masks[i])
+        print(train_labels[i])
 
     device = Checking_cuda()
     #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1566,13 +1622,11 @@ if __name__ == '__main__':
     print(f"Datatype of tensor: {train_inputs.dtype}")  # 자료형 확인
     print(f"Device tensor is stored on: {train_inputs.device}")  # 어느 장치에 저장되는지 ex) gpu, cpu
 
-    for i in range(10):
-        print(train_inputs[i])
-        print(train_masks[i])
-        print(train_labels[i])
+    # for i in range(10):
+    #     print(train_inputs[i])
+    #     print(train_masks[i])
+    #     print(train_labels[i])
 
-
-    # print(custom_token_id)
 
     batch_size = 16  # 또는 32 등 원하는 배치 크기
 
@@ -1580,21 +1634,39 @@ if __name__ == '__main__':
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
 
+    gc.collect()
+    torch.cuda.empty_cache()
+
     model = BertForSequenceClassification.from_pretrained(
         'bert-base-multilingual-cased',
         num_labels=2)
     model.resize_token_embeddings(len(tokenizer_bert))
-    optimizer = AdamW(model.parameters(), lr=2e-5)
+    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
 
     #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    #학습 재현을 위한 시드 고정
+    seed = 55
+    torch.cuda.manual_seed_all(seed)  # GPU 모델 전부
 
+    # 그래디언트(기울기) 초기화
+    # 가중치 편향에 대해 새로운 기울기 계산
+    model.zero_grad()
 
     # 모델 학습
-    epochs = 3
+    epochs = 4
+
+    # 총 훈련 스텝 : 배치반복 횟수 * 에폭  = 620
+    total_steps = len(train_dataloader) * epochs
+    # 스케줄러 생성
+    scheduler = get_linear_schedule_with_warmup(optimizer
+                                                , num_warmup_steps=0
+                                                , num_training_steps=total_steps)
+
     model.train()
     for epoch in range(epochs):  # 예: epochs = 3
+        total_loss = 0      # 손실값 평균 계산용
         for step, batch in enumerate(train_dataloader):
             b_input_ids = batch[0].to(device).long()
             b_attention_mask = batch[1].to(device).long()
@@ -1611,14 +1683,27 @@ if __name__ == '__main__':
             )
 
             loss = outputs.loss
-            logits = outputs.logits
+            total_loss += loss.item()
+            logits = outputs.logits     # class 구분 가능성을 나타내는 실수 vector.
 
             # Backward + optimizer step
             loss.backward()
+            # 그래디언트 클리핑 (기울기 폭주 방지)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+
+            # 스케줄러로 학습률 감소
+            scheduler.step()
+
+            # 그래디언트 초기화
+            model.zero_grad()
 
             if step % 10 == 0:
                 print(f"[Epoch {epoch + 1}] Step {step} - Loss: {loss.item():.4f}")
+
+        # 평균 로스 계산
+        avg_train_loss = total_loss / len(train_dataloader)
+        print(f'평균 loss = {avg_train_loss}')
 
     # 경로 설정
     model_save_path = './saved_bert_model_2'
@@ -1627,6 +1712,8 @@ if __name__ == '__main__':
     model.save_pretrained(model_save_path)
     tokenizer_bert.save_pretrained(model_save_path)
 
+    model = BertForSequenceClassification.from_pretrained("saved_bert_model_2")
+    model.to(device)
 
     # 평가 모드
     model.eval()
@@ -1634,6 +1721,7 @@ if __name__ == '__main__':
     test_data = TensorDataset(test_inputs, test_masks, test_labels)
     test_sampler = SequentialSampler(test_data)  # 순차적으로 순회 (정답 순서 보장)
     test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=batch_size)
+
 
     predictions = []
     true_labels = []
@@ -1660,7 +1748,10 @@ if __name__ == '__main__':
     for pred, true in zip(predictions, true_labels):
         print(f"예측: {pred}, 실제: {true}")
 
+
     # 선택적으로 성능 평가
-    from sklearn.metrics import classification_report
+    from sklearn.metrics import classification_report, accuracy_score
 
     print(classification_report(true_labels, predictions, digits=4))
+    print("\n[정확도]")
+    print("Accuracy:", accuracy_score(true_labels, predictions))
