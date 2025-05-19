@@ -12,7 +12,6 @@ from transformers import BertForSequenceClassification
 import Preprocessing as pr
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 from sklearn.metrics import roc_auc_score, roc_curve
-import matplotlib.pyplot as plt
 
 
 model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_3")

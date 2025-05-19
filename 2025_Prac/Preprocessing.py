@@ -1666,10 +1666,6 @@ if __name__ == '__main__':
     gc.collect()
     torch.cuda.empty_cache()
 
-    # model = BertForSequenceClassification.from_pretrained(
-    #     'bert-base-multilingual-cased',
-    #     num_labels=2)
-
     # 먼저 구성 객체 설정
     config = BertConfig.from_pretrained(
         'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
