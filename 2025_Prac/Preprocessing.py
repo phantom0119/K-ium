@@ -1645,7 +1645,7 @@ if __name__ == '__main__':
     #     print(train_labels[i])
 
 
-    batch_size = 16  # 또는 32 등 원하는 배치 크기
+    batch_size = 32  # 또는 32 등 원하는 배치 크기
 
     train_dataset = TensorDataset(train_inputs, train_masks, train_labels)
     train_sampler = RandomSampler(train_dataset)
