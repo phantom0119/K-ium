@@ -37,6 +37,7 @@ print("복원된 문장:", masked)
 
  대뇌의 4개(Parietal, Temporal, Occipital, Frontal)의 엽(Lobe) 분류 용어에 대한 정형화.
  DLBCL = large B-cell lymphoma
+ GKRS = Gamma Knife Radiosurgery
 
 
 
