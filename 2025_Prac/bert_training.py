@@ -175,11 +175,11 @@ def sent_tokenizing(DSet: pd.DataFrame):
 
         text = Bert_sentences
 
+        text = semi_preprocessing(text)
         text = prp.medical_words_preprocessing(text)
         text = prp.cardi_ordinal_preprocessing(text)
         text = prp.pos_neg_preprocessing(text)
         text = prp.demention_preprocessing(text)
-        text = semi_preprocessing(text)
         text = prp.unnecessary_preprocessing(text)
 
         text = '[CLS] ' + text
@@ -206,11 +206,24 @@ def BERT_Tokenizing_Model(sentences: list):
 
     # 한글 호환되는 토크나이저로 한글 단어에 대한 토큰을 추출하고, 이를 다른 토크나이저의 vocab에 추가한다.
     kor_tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-    kor_tokenizer.add_tokens(['쇄', '대뇌', '소뇌', '두통', '수술',
+    kor_tokenizer.add_tokens(['폐쇄', '찢', '대뇌', '소뇌', '두통', '수술',
                               '감소', '증가', '관찰'])     # [UNK]로 분류되는 단어 또는 의학 용어 추가.
     for s in sentences :
         kts = kor_tokenizer.tokenize(s)
-        hangul_only = [token for token in kts if re.fullmatch(r'[가-힣]+', token)]
+
+        words = []
+        current_word = ''
+        for token in kts:
+            if token.startswith('##'):
+                current_word += token[2:]
+            else:
+                if current_word:
+                    words.append(current_word)
+                current_word = token
+        if current_word:
+            words.append(current_word)
+
+        hangul_only = [token for token in words if re.fullmatch(r'[가-힣#]+', token)]
         new_tokens = list(set(hangul_only))
         tokens_to_add = [tok for tok in new_tokens if tok not in tokenizer_bert.get_vocab()]
         tokenizer_bert.add_tokens(tokens_to_add)
@@ -222,28 +235,48 @@ def BERT_Tokenizing_Model(sentences: list):
     # [CLS] [SEP] 또는 [SEP] [SEP]가 발생하는 경우를 제거.
     # 모든 텍스트를 소문자로 변환.
     for s in sentences:
-        t = tokenizer_bert.tokenize(s)
-        t = [tok if tok in ['[CLS]', '[SEP]'] else tok.lower()
-             for tok in t
-             if (tok in ['[CLS]', '[SEP]']) or (tok.lower() not in stopwords)]
+        tokens = tokenizer_bert.tokenize(s)
 
-        # MAX_LEN = max(MAX_LEN, len(t))
-        tokenized_sentences.append(t[:MAX_LEN])
+        words = []
+        current_word = ''
+        for token in tokens:
+            if token.startswith('##'):
+                current_word += token[2:]
+            else:
+                if current_word:
+                    words.append(current_word)
+                current_word = token
+        if current_word :
+            words.append(current_word)
+
+        tokens_to_add = [tok for tok in words if tok not in tokenizer_bert.get_vocab()]
+        tokenizer_bert.add_tokens(tokens_to_add)
+
+        tokens = [tok if tok in ['[CLS]', '[SEP]', '[UNK]'] else tok.lower()
+             for tok in words
+             if (tok in ['[CLS]', '[SEP]', '[UNK]']) or (tok.lower() not in stopwords)]
+
+        # if '[UNK]' in tokens:
+        #     print(tokens)
+        #     print(s)
+        #     print('#################################')
+        tokenized_sentences.append(tokens)
 
     # 단어 토큰에 고유한 인덱스 번호를 부여하고, 패딩을 첨가해 시퀀스 생성.
     input_ids = [tokenizer_bert.convert_tokens_to_ids(x) for x in tokenized_sentences]
     input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="pre", padding="pre")
 
-    # 유의미한 토큰을 계산하고 최댓값을 추출하기 위함 (445개).
-    # for lst in input_ids:
-    #     cnt = 0
-    #     for l in lst:
-    #         if l == tokenizer_bert.pad_token_id :   continue
-    #         cnt += 1
-    #     if max_token_size < cnt :
-    #         max_token_size = cnt
-    #         print(tokenizer_bert.convert_ids_to_tokens(lst))
-    #         print(cnt)
+
+    #유의미한 토큰을 계산하고 최댓값을 추출하기 위함 (445개).
+    for lst in input_ids:
+        cnt = 0
+        for l in lst:
+            if l == tokenizer_bert.pad_token_id : continue
+            cnt += 1
+        if max_token_size < cnt :
+            max_token_size = cnt
+            #print(tokenizer_bert.convert_ids_to_tokens(lst))
+            #print(cnt)
 
     return input_ids
 
@@ -255,15 +288,13 @@ def training(model : BertForSequenceClassification,
 
     # 모델을 gpu에 담기.
     model.to(device)
-    # 모델을 학습 모드로 두고 진행.
-    model.train()
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
 
     # 모델 에폭수
-    epochs = 4
+    epochs = 3
     # 총 훈련 스탭 = 배치 반복 횟수 * 에폭수
     total_steps = len(train_dataloader) * epochs
     # 스케줄러 생성
@@ -271,16 +302,13 @@ def training(model : BertForSequenceClassification,
                                                 num_warmup_steps= int(0.1 * total_steps),
                                                 num_training_steps=total_steps) # 또는 0
 
-    # 에폭수만큼 배치 학습 반복
+    # 에폭수만큼 배치 학습 반복 (조기 종료 추가)
     for epoch in range(epochs):
         total_loss = 0          # 평균 손실값 계산용
-        # tqdm으로 진행 상태바 생성.
-        train_iterator = tqdm(enumerate(train_dataloader)
-                              , total=len(train_dataloader)
-                              , desc="Training"
-                              , leave=False)
+        # 모델을 학습 모드로 두고 진행.
+        model.train()
 
-        for step, batch in train_iterator:
+        for step, batch in train_dataloader:
             # 학습에 사용할 train_dataloader의 각 항목(inputs, attention, label)을 device에 담기.
             # 배치 사이즈에 맞는 데이터 묶음이 담겨 있다.
             b_input_ids = batch[0].long().to(device)
@@ -312,15 +340,30 @@ def training(model : BertForSequenceClassification,
             # 학습률(Learning Rate) 동적 조율
             scheduler.step()
 
-            # tqdm 상태 update
-            train_iterator.set_postfix(loss=loss.item())
-
             if step % 10 == 0:
                 print(f"[Epoch {epoch + 1}] Step {step} - Loss: {loss.item():.4f}")
 
         # 평균 로스 계산
         avg_train_loss = total_loss / len(train_dataloader)
         print(f'평균 loss = {avg_train_loss}')
+
+
+        # # 검증 정확도 계산 #
+        # cstat = validation(test_dataloader)
+        # print(f'[Epoch {epoch + 1}] Validation Accuracy = {cstat:.4f}')
+
+        # # === Early stopping 조건 확인 ===
+        # if cstat > best_val_acc:
+        #     best_val_acc = cstat
+        #     early_stop_counter = 0
+        #     model.save_pretrained(model_save_path)
+        #     print("✅ 모델 성능 향상 - 저장 완료")
+        # else:
+        #     early_stop_counter += 1
+        #     print(f"⏸️ 개선 없음 - early_stop_counter = {early_stop_counter}/{patience}")
+        #     if early_stop_counter >= patience:
+        #         print("⛔ 조기 종료 조건 충족. 학습 종료.")
+        #         break
 
     # 학습 완료한 모델 저장
     model.save_pretrained(model_save_path)
@@ -330,9 +373,9 @@ def training(model : BertForSequenceClassification,
 
 def validation(test_dataloader):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = BertForSequenceClassification.from_pretrained(model_save_path)
-    model.to(device)
-    model.eval()
+    model2 = BertForSequenceClassification.from_pretrained('../../saved_bert_model_3')
+    model2.to(device)
+    model2.eval()
 
     predictions = []    # 예측값
     true_labels = []    # 실제값
@@ -343,7 +386,7 @@ def validation(test_dataloader):
             b_attention_mask = batch[1].long().to(device)
             b_labels = batch[2].long().to(device)
 
-            outputs = model(
+            outputs = model2(
                 input_ids=b_input_ids,
                 attention_mask=b_attention_mask
             )
@@ -358,7 +401,10 @@ def validation(test_dataloader):
     print(classification_report(true_labels, predictions, digits=4))
     print("\n[정확도]")
     print("Accuracy:", accuracy_score(true_labels, predictions))
-    print(f"AUC: {round(roc_auc_score(predictions, true_labels), 6)}")
+    cstat = round(roc_auc_score(predictions, true_labels), 6)
+    print(f"AUC: {cstat}")
+
+    return cstat
 
 
 if __name__ == '__main__':
@@ -369,8 +415,8 @@ if __name__ == '__main__':
     tdf = pd.DataFrame(kiumSet)
     vdf = pd.DataFrame(validSet)
 
-    # mim = 0
-    # lim = 6190
+    # mim = 2000
+    # lim = 2050
     # tdf = tdf.iloc[mim:lim]
 
 
@@ -405,19 +451,19 @@ if __name__ == '__main__':
     test_masks = prp.attention_masking(test_inputs)
 
 
-    # for idx in range(0,6190):
-    #     if '[UNK]' in train_sentences[idx]:
-    #         print(tdf.iloc[idx].Findings + ' ' + tdf.iloc[idx].Conclusion)
-    #         print()
-    #         print(train_sentences[idx])
-    #         print()
-    #         print(tokenizer_bert.convert_ids_to_tokens(train_inputs[idx]))
-    #         print('####################################################################################')
+    # for idx in range(0,50):
+    #     #if '[UNK]' in train_sentences[idx]:
+    #     print(tdf.iloc[idx].Findings + ' ' + tdf.iloc[idx].Conclusion)
+    #     print()
+    #     print(train_sentences[idx])
+    #     print()
+    #     print(tokenizer_bert.convert_ids_to_tokens(train_inputs[idx]))
+    #     print('####################################################################################')
 
 
     #6. 학습에 필요한 gpu 활성화 및 모델 경로 설정
     device = prp.Checking_cuda()
-    model_save_path = '../../saved_bert_model_1'
+    model_save_path = '../../saved_bert_model_3'
 
     #7. BERT 학습 모델.
     # 먼저 구성 객체 설정
@@ -451,16 +497,18 @@ if __name__ == '__main__':
     test_sampler = SequentialSampler(test_data)  # 순차적으로 순회 (정답 순서 보장)
     test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=batch_size)
 
+    print(max_token_size)
 
     #10. 모델 학습 진행.
-    training(model, device, train_dataloader)
+    #training(model, device, train_dataloader)
 
     #11. 모델 검증(테스트) 진행.
-    validation(test_dataloader)
+    c_statistic = validation(test_dataloader)
 
 
 
 '''
+한글 토큰을 별도 토크나이저로 추출 후 학습
 1차 테스트 결과
         precision    recall  f1-score   support
 
@@ -474,4 +522,27 @@ weighted avg     0.9898    0.9898    0.9898      2653
 [정확도]
 Accuracy: 0.9898228420655861
 AUC: 0.96848
+'''
+
+'''
+한글 토큰에서 '##'으로 분리된 토큰을들 결합 후 학습
+2차 테스트 결과
+precision    recall  f1-score   support
+
+           0     0.9955    0.9951    0.9953      2425
+           1     0.9476    0.9518    0.9497       228
+
+    accuracy                         0.9913      2653
+   macro avg     0.9715    0.9734    0.9725      2653
+weighted avg     0.9913    0.9913    0.9913      2653
+
+[정확도]
+Accuracy: 0.9913305691669808
+AUC: 0.97153
+'''
+
+'''
+한글 + 영어 모두 '##'으로 분리된 토큰들을 결합 후 학습
+3차 테스트 결과
+
 '''

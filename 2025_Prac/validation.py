@@ -14,7 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 from sklearn.metrics import roc_auc_score, roc_curve
 
 
-model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_3")
+model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_4")
 device = pr.Checking_cuda()
 model.to(device)
 

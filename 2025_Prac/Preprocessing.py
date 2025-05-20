@@ -43,7 +43,7 @@ nltk.download('stopwords')  # 불용어 사전
 #  이후에도 Token Embedding 작업에 사용.
 #  bert-base-multilingual-cased : 다국어 지원 토크나이저
 #  microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract : 의학 소견/논문 바탕의 pretrained model
-vocab = ['찢어지는', '촤측']
+vocab = ['찢어지는', '촤측', '없', "폐쇄", '높', '빠', '쪽', '쓰', '낮', '양', '받', '괜찮', '앞', '눈']
 #tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
 tokenizer_bert.add_tokens(vocab)
@@ -56,6 +56,8 @@ stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 
              '에서', '이에', '이', '인', '의', '외', '와', '을', '인해', '에는', '에', '에도',
              '중', '지', '현', '함', '~', '"',
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
+
+max_token_size = 0
 
 
 ## DataFrame 'info' 출력.
@@ -1191,7 +1193,11 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
 
         ##  x. '__SEP__' 토큰을 BERT 형식에 맞게 '[SEP]'로 변환  --> 대소문자 구분함.
         Ftext = re.sub(r'__SEP__', r'[SEP]', Ftext)
-        Ftext = re.sub(r'\[SEP\]\s+\[SEP\]', r'[SEP]', Ftext)
+        while True:
+            new_text = re.sub(r'(?:\[(SEP|CLS)\])[ ]+\[SEP\]', r'[\1]', Ftext)
+            if new_text == Ftext:
+                break
+            Ftext = new_text
 
         ##  14. 문자열 토큰화 작업.
         token_test = tokenizer_bert.tokenize(Ftext)     # 전처리한 소견을 토큰화
@@ -1215,7 +1221,7 @@ def Findings_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
         #     else: continue
         # print(raw_data)
         # print('-------' * 20)
-        # print(token_test)
+        #print(token_test)
 
 
         ##  15. 모든 Raw Data 탐색 결과를 저장 후 return.
@@ -1286,10 +1292,18 @@ def Conclusion_Preprocessing(df : pd.DataFrame, redf : pd.DataFrame) :
 
         ##  x. '__SEP__' 토큰을 BERT 형식에 맞게 '[SEP]'로 변환  --> 대소문자 구분함.
         Ctext = re.sub(r'__SEP__', r'[SEP]', Ctext)
-        Ctext = re.sub(r'\[SEP\]\s+\[SEP\]', r'[SEP]', Ctext)
+        while True:
+            new_text = re.sub(r'(?:\[(SEP|CLS)\])[ ]+\[SEP\]', r'[\1]', Ctext)
+            if new_text == Ctext:
+                break
+            Ctext = new_text
 
         ##  9. 문자열 토큰화 작업.
         token_test = tokenizer_bert.tokenize(Ctext)     # 전처리한 소견을 토큰화
+        # for t in token_test :
+        #     if t == '[UNK]':
+        #         print(Ctext)
+        #         print(token_test)
         token_test = merge_wordpieces(token_test)       # 토큰 데이터를 재결합
         token_test = reorg_wordpieces(token_test)       # 토큰 데이터의 불용어 제거 및 영문+한글 단어의 정형화
 
@@ -1423,6 +1437,7 @@ def reorg_wordpieces(tokens : list):
 ## 리스트에 있는 단어 원소들을 하나의 고유한 시퀀스로 변환
 # 만약 BERT 모델의 사전(vocab)에 없는 단어인 경우에는 사용자 사전(custom_token_id)을 통해 고유 시퀀스를 추가한다.
 def word_sequencing(df : pd.DataFrame):
+    global max_token_size
     MAX_LEN = 220                                       # 확인된 리스트의 최대 원소 수 = 218개
     sentences = df['context']                           # 토큰화할 리스트를 저장한 Column
     tokenized_sentences = []                            # 시퀀스 결과를 저장할 List
@@ -1438,7 +1453,7 @@ def word_sequencing(df : pd.DataFrame):
                 if tk not in tokenizer_bert.get_vocab():            # 토큰(단어)가 사용자 사전에 없는 경우 추가하여 시퀀스 부여.
                     tokenizer_bert.add_tokens(tk)
             # [SEP] 토큰 이전 토큰이 [CLS] 또는 [SEP]인지 검사.  --> 불필요한 [SEP] 배치 방지 목적.
-            elif (prev_id == tokenizer_bert.sep_token_id or prev_id == tokenizer_bert.cls_token_id)\
+            elif (prev_id == tokenizer_bert.sep_token_id or prev_id == tokenizer_bert.cls_token_id) \
                     and id == tokenizer_bert.sep_token_id:
                 continue
             cust_ids.append(tokenizer_bert.convert_tokens_to_ids(tk))
@@ -1460,6 +1475,16 @@ def word_sequencing(df : pd.DataFrame):
          [     0      0      0 ... 119572  14633    102]
          [     0      0      0 ...  10321  22608    102]]
     """
+
+    for lst in tokenized_sentences:
+        cnt = 0
+        for l in lst:
+            if l == tokenizer_bert.pad_token_id :   continue
+            cnt += 1
+        if max_token_size < cnt :
+            max_token_size = cnt
+            # print(tokenizer_bert.convert_ids_to_tokens(lst))
+            # print(cnt)
     return tokenized_sentences
 
 
@@ -1628,13 +1653,16 @@ if __name__ == '__main__':
     train_masks = attention_masking(train_inputs)
     test_masks = attention_masking(test_inputs)
 
-    for i in range(0, 30):
-        print(pre_df['context'][i])
-        print(train_inputs[i])
-        #print(tokenizer_bert.convert_ids_to_tokens(train_inputs[i]))
-        #print(train_masks[i])
-        #print(train_labels[i])
-        print()
+    # for idx in range(0,6190):
+    #     if '[UNK]' in train.iloc[idx].context:
+    #         print(train.iloc[idx].context)
+    #         print()
+    #         print(train_inputs[idx])
+    #         print()
+    #         print(tokenizer_bert.convert_ids_to_tokens(train_inputs[idx]))
+    #         print('####################################################################################')
+
+    print(max_token_size)
 
 
     device = Checking_cuda()
@@ -1678,7 +1706,7 @@ if __name__ == '__main__':
         config=config
     )
     model.resize_token_embeddings(len(tokenizer_bert))
-    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
 
     #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -1736,7 +1764,7 @@ if __name__ == '__main__':
         print(f'평균 loss = {avg_train_loss}')
 
     # 경로 설정
-    model_save_path = '../../saved_bert_model_3'
+    model_save_path = '../../saved_bert_model_4'
 
     # 모델 저장
     model.save_pretrained(model_save_path)
@@ -1758,9 +1786,9 @@ if __name__ == '__main__':
 
     with torch.no_grad():
         for batch in test_dataloader:
-            b_input_ids = batch[0].to(device).long()
-            b_attention_mask = batch[1].to(device).long()
-            b_labels = batch[2].to(device).long()
+            b_input_ids = batch[0].long().to(device)
+            b_attention_mask = batch[1].long().to(device)
+            b_labels = batch[2].long().to(device)
 
             outputs = model(
                 input_ids=b_input_ids,
