@@ -3,7 +3,7 @@ BERT tokenizer로 토큰화한 결과를 추가 처리 없이 직접 학습에 �
 '''
 import pandas as pd
 import numpy as np
-import torch
+import torch, gc
 import nltk
 import re
 from nltk.tokenize import sent_tokenize
@@ -229,31 +229,15 @@ def BERT_Tokenizing_Model(sentences: list):
         tokenizer_bert.add_tokens(tokens_to_add)
 
     # BERT Tokenizer 최대 길이 = 512
-    MAX_LEN = 450
+    MAX_LEN = 512
     tokenized_sentences = []
 
     # [CLS] [SEP] 또는 [SEP] [SEP]가 발생하는 경우를 제거.
     # 모든 텍스트를 소문자로 변환.
     for s in sentences:
         tokens = tokenizer_bert.tokenize(s)
-
-        words = []
-        current_word = ''
-        for token in tokens:
-            if token.startswith('##'):
-                current_word += token[2:]
-            else:
-                if current_word:
-                    words.append(current_word)
-                current_word = token
-        if current_word :
-            words.append(current_word)
-
-        tokens_to_add = [tok for tok in words if tok not in tokenizer_bert.get_vocab()]
-        tokenizer_bert.add_tokens(tokens_to_add)
-
         tokens = [tok if tok in ['[CLS]', '[SEP]', '[UNK]'] else tok.lower()
-             for tok in words
+             for tok in tokens
              if (tok in ['[CLS]', '[SEP]', '[UNK]']) or (tok.lower() not in stopwords)]
 
         # if '[UNK]' in tokens:
@@ -285,16 +269,20 @@ def BERT_Tokenizing_Model(sentences: list):
 def training(model : BertForSequenceClassification,
              device : torch.device,
              train_dataloader : DataLoader):
+    gc.collect()
+    torch.cuda.empty_cache()
 
+    # 모델을 학습 모드로 두고 진행.
+    model.train()
     # 모델을 gpu에 담기.
     model.to(device)
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8)
 
     # 모델 에폭수
-    epochs = 3
+    epochs = 5
     # 총 훈련 스탭 = 배치 반복 횟수 * 에폭수
     total_steps = len(train_dataloader) * epochs
     # 스케줄러 생성
@@ -305,10 +293,8 @@ def training(model : BertForSequenceClassification,
     # 에폭수만큼 배치 학습 반복 (조기 종료 추가)
     for epoch in range(epochs):
         total_loss = 0          # 평균 손실값 계산용
-        # 모델을 학습 모드로 두고 진행.
-        model.train()
 
-        for step, batch in train_dataloader:
+        for step, batch in enumerate(train_dataloader):
             # 학습에 사용할 train_dataloader의 각 항목(inputs, attention, label)을 device에 담기.
             # 배치 사이즈에 맞는 데이터 묶음이 담겨 있다.
             b_input_ids = batch[0].long().to(device)
@@ -348,23 +334,6 @@ def training(model : BertForSequenceClassification,
         print(f'평균 loss = {avg_train_loss}')
 
 
-        # # 검증 정확도 계산 #
-        # cstat = validation(test_dataloader)
-        # print(f'[Epoch {epoch + 1}] Validation Accuracy = {cstat:.4f}')
-
-        # # === Early stopping 조건 확인 ===
-        # if cstat > best_val_acc:
-        #     best_val_acc = cstat
-        #     early_stop_counter = 0
-        #     model.save_pretrained(model_save_path)
-        #     print("✅ 모델 성능 향상 - 저장 완료")
-        # else:
-        #     early_stop_counter += 1
-        #     print(f"⏸️ 개선 없음 - early_stop_counter = {early_stop_counter}/{patience}")
-        #     if early_stop_counter >= patience:
-        #         print("⛔ 조기 종료 조건 충족. 학습 종료.")
-        #         break
-
     # 학습 완료한 모델 저장
     model.save_pretrained(model_save_path)
     tokenizer_bert.save_pretrained(model_save_path)
@@ -372,8 +341,11 @@ def training(model : BertForSequenceClassification,
 
 
 def validation(test_dataloader):
+    gc.collect()
+    torch.cuda.empty_cache()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model2 = BertForSequenceClassification.from_pretrained('../../saved_bert_model_3')
+    model2 = BertForSequenceClassification.from_pretrained(model_save_path)
     model2.to(device)
     model2.eval()
 
@@ -412,7 +384,7 @@ if __name__ == '__main__':
     validSet = pd.read_csv(r'.\ValidationSet.csv')
 
     # 학습/테스트 DataFrame
-    tdf = pd.DataFrame(kiumSet)
+    #tdf = pd.DataFrame(kiumSet)
     vdf = pd.DataFrame(validSet)
 
     # mim = 2000
@@ -424,12 +396,12 @@ if __name__ == '__main__':
     tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
 
     #1. 결측값 처리
-    prp.empty_to_missing(tdf)
+    #prp.empty_to_missing(tdf)
     prp.empty_to_missing(vdf)
 
 
     #2. Findings + Conclusion 후, 문장 토큰화로 [CLS], [SEP] 토큰 추가하기.
-    train_sentences = sent_tokenizing(tdf)
+    #train_sentences = sent_tokenizing(tdf)
     test_sentences = sent_tokenizing(vdf)
 
     """
@@ -438,16 +410,16 @@ if __name__ == '__main__':
     """
 
     #3. 토큰이 추가된 문장을 단어 토큰으로 생성 --> 단어 Sequence 생성.
-    train_inputs = BERT_Tokenizing_Model(train_sentences)
+    #train_inputs = BERT_Tokenizing_Model(train_sentences)
     test_inputs = BERT_Tokenizing_Model(test_sentences)
 
     #4. 정답지
     encoder = LabelEncoder()
-    train_labels = encoder.fit_transform(tdf['AcuteInfarction'])
+    #train_labels = encoder.fit_transform(tdf['AcuteInfarction'])
     test_labels = encoder.fit_transform(vdf['AcuteInfarction'])
 
     #5. inputs에 대한 Attention mask 생성
-    train_masks = prp.attention_masking(train_inputs)
+    #train_masks = prp.attention_masking(train_inputs)
     test_masks = prp.attention_masking(test_inputs)
 
 
@@ -463,7 +435,7 @@ if __name__ == '__main__':
 
     #6. 학습에 필요한 gpu 활성화 및 모델 경로 설정
     device = prp.Checking_cuda()
-    model_save_path = '../../saved_bert_model_3'
+    model_save_path = '../../saved_bert_model_4'
 
     #7. BERT 학습 모델.
     # 먼저 구성 객체 설정
@@ -481,17 +453,17 @@ if __name__ == '__main__':
     batch_size = 32  # 또는 32 등 원하는 배치 크기
 
     #8. 학습/검증을 위한 torch tensor 변환.
-    train_inputs = torch.tensor(train_inputs).long()
-    train_labels = torch.tensor(train_labels).long()
-    train_masks = torch.tensor(train_masks).long()
+    #train_inputs = torch.tensor(train_inputs).long()
+    #train_labels = torch.tensor(train_labels).long()
+    #train_masks = torch.tensor(train_masks).long()
     test_inputs = torch.tensor(test_inputs).long()
     test_labels = torch.tensor(test_labels).long()
     test_masks = torch.tensor(test_masks).long()
 
     #9. DataLoader 생성
-    train_dataset = TensorDataset(train_inputs, train_masks, train_labels)
-    train_sampler = RandomSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
+    #train_dataset = TensorDataset(train_inputs, train_masks, train_labels)
+    #train_sampler = RandomSampler(train_dataset)
+    #train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
 
     test_data = TensorDataset(test_inputs, test_masks, test_labels)
     test_sampler = SequentialSampler(test_data)  # 순차적으로 순회 (정답 순서 보장)
@@ -510,7 +482,7 @@ if __name__ == '__main__':
 '''
 한글 토큰을 별도 토크나이저로 추출 후 학습
 1차 테스트 결과
-        precision    recall  f1-score   support
+                precision    recall  f1-score   support
 
            0     0.9942    0.9946    0.9944      2425
            1     0.9427    0.9386    0.9407       228
@@ -527,7 +499,7 @@ AUC: 0.96848
 '''
 한글 토큰에서 '##'으로 분리된 토큰을들 결합 후 학습
 2차 테스트 결과
-precision    recall  f1-score   support
+                precision    recall  f1-score   support
 
            0     0.9955    0.9951    0.9953      2425
            1     0.9476    0.9518    0.9497       228
@@ -544,5 +516,16 @@ AUC: 0.97153
 '''
 한글 + 영어 모두 '##'으로 분리된 토큰들을 결합 후 학습
 3차 테스트 결과
+                precision    recall  f1-score   support
 
+           0     0.9212    0.9984    0.9582      2425
+           1     0.8400    0.0921    0.1660       228
+
+    accuracy                         0.9205      2653
+   macro avg     0.8806    0.5452    0.5621      2653
+weighted avg     0.9143    0.9205    0.8902      2653
+
+[정확도]
+Accuracy: 0.9204673954014323
+AUC: 0.880616
 '''
