@@ -279,10 +279,10 @@ def training(model : BertForSequenceClassification,
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=1e-4)
 
     # 모델 에폭수
-    epochs = 5
+    epochs = 3
     # 총 훈련 스탭 = 배치 반복 횟수 * 에폭수
     total_steps = len(train_dataloader) * epochs
     # 스케줄러 생성
@@ -391,9 +391,13 @@ if __name__ == '__main__':
     # lim = 2050
     # tdf = tdf.iloc[mim:lim]
 
+    # 모델 저장/불러오기 경로
+    model_save_path = '../../saved_bert_model_2'
 
     # tokenizer ( PubMed 초록(abstract)만을 사용하여 처음부터 사전학습한 모델 )
-    tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
+    #tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
+    tokenizer_bert = BertTokenizer.from_pretrained(model_save_path)
+
 
     #1. 결측값 처리
     #prp.empty_to_missing(tdf)
@@ -433,22 +437,25 @@ if __name__ == '__main__':
     #     print('####################################################################################')
 
 
-    #6. 학습에 필요한 gpu 활성화 및 모델 경로 설정
+    #6. 학습에 필요한 gpu 활성화
     device = prp.Checking_cuda()
-    model_save_path = '../../saved_bert_model_4'
+
 
     #7. BERT 학습 모델.
     # 먼저 구성 객체 설정
-    config = BertConfig.from_pretrained(
-        'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
-        num_labels=2
-    )
+    # config = BertConfig.from_pretrained(
+    #     'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+    #     num_labels=2
+    # )
+    #
+    # # 분류용 헤드를 수동으로 생성
+    # model = BertForSequenceClassification.from_pretrained(
+    #     'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+    #     config=config
+    # )
 
-    # 분류용 헤드를 수동으로 생성
-    model = BertForSequenceClassification.from_pretrained(
-        'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
-        config=config
-    )
+    #config = BertConfig.from_pretrained(model_save_path)
+    #model = BertForSequenceClassification.from_pretrained(model_save_path, config=config)
 
     batch_size = 32  # 또는 32 등 원하는 배치 크기
 
@@ -528,4 +535,25 @@ weighted avg     0.9143    0.9205    0.8902      2653
 [정확도]
 Accuracy: 0.9204673954014323
 AUC: 0.880616
+'''
+
+'''
+4차 테스트
+epoch=4 가 좋은 것 같다.
+lr = 1e 말고 2e-5 등도 시도해본다.
+기존 학습된 모델에 거듭 학습한 모델을 _4에만 저장한다.
+2e-5 는 0.96 수준.  크게 개선되지 않음
+                precision    recall  f1-score   support
+
+           0     0.9922    0.9934    0.9928      2425
+           1     0.9289    0.9167    0.9227       228
+
+    accuracy                         0.9868      2653
+   macro avg     0.9605    0.9550    0.9578      2653
+weighted avg     0.9867    0.9868    0.9868      2653
+
+[정확도]
+Accuracy: 0.9868073878627969
+AUC: 0.960532
+
 '''
