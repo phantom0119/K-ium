@@ -15,8 +15,6 @@ from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
 from torch.optim import AdamW
-from tqdm import tqdm
-import pytest
 
 # 토큰화된 결과에서 유의미한 토큰이 가장 많았을 때의 개수
 max_token_size = 0
@@ -279,7 +277,7 @@ def training(model : BertForSequenceClassification,
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=1e-4)
+    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
 
     # 모델 에폭수
     epochs = 3
@@ -384,7 +382,7 @@ if __name__ == '__main__':
     validSet = pd.read_csv(r'.\ValidationSet.csv')
 
     # 학습/테스트 DataFrame
-    #tdf = pd.DataFrame(kiumSet)
+    tdf = pd.DataFrame(kiumSet)
     vdf = pd.DataFrame(validSet)
 
     # mim = 2000
@@ -392,20 +390,19 @@ if __name__ == '__main__':
     # tdf = tdf.iloc[mim:lim]
 
     # 모델 저장/불러오기 경로
-    model_save_path = '../../saved_bert_model_2'
+    model_save_path = '../../saved_bert_model_3'
 
     # tokenizer ( PubMed 초록(abstract)만을 사용하여 처음부터 사전학습한 모델 )
-    #tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
-    tokenizer_bert = BertTokenizer.from_pretrained(model_save_path)
+    tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
 
 
     #1. 결측값 처리
-    #prp.empty_to_missing(tdf)
+    prp.empty_to_missing(tdf)
     prp.empty_to_missing(vdf)
 
 
     #2. Findings + Conclusion 후, 문장 토큰화로 [CLS], [SEP] 토큰 추가하기.
-    #train_sentences = sent_tokenizing(tdf)
+    train_sentences = sent_tokenizing(tdf)
     test_sentences = sent_tokenizing(vdf)
 
     """
@@ -414,16 +411,16 @@ if __name__ == '__main__':
     """
 
     #3. 토큰이 추가된 문장을 단어 토큰으로 생성 --> 단어 Sequence 생성.
-    #train_inputs = BERT_Tokenizing_Model(train_sentences)
+    train_inputs = BERT_Tokenizing_Model(train_sentences)
     test_inputs = BERT_Tokenizing_Model(test_sentences)
 
     #4. 정답지
     encoder = LabelEncoder()
-    #train_labels = encoder.fit_transform(tdf['AcuteInfarction'])
+    train_labels = encoder.fit_transform(tdf['AcuteInfarction'])
     test_labels = encoder.fit_transform(vdf['AcuteInfarction'])
 
     #5. inputs에 대한 Attention mask 생성
-    #train_masks = prp.attention_masking(train_inputs)
+    train_masks = prp.attention_masking(train_inputs)
     test_masks = prp.attention_masking(test_inputs)
 
 
@@ -442,35 +439,32 @@ if __name__ == '__main__':
 
 
     #7. BERT 학습 모델.
-    # 먼저 구성 객체 설정
-    # config = BertConfig.from_pretrained(
-    #     'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
-    #     num_labels=2
-    # )
-    #
-    # # 분류용 헤드를 수동으로 생성
-    # model = BertForSequenceClassification.from_pretrained(
-    #     'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
-    #     config=config
-    # )
+    #먼저 구성 객체 설정
+    config = BertConfig.from_pretrained(
+        'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+        num_labels=2
+    )
 
-    #config = BertConfig.from_pretrained(model_save_path)
-    #model = BertForSequenceClassification.from_pretrained(model_save_path, config=config)
+    # 분류용 헤드를 수동으로 생성
+    model = BertForSequenceClassification.from_pretrained(
+        'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+        config=config
+    )
 
     batch_size = 32  # 또는 32 등 원하는 배치 크기
 
     #8. 학습/검증을 위한 torch tensor 변환.
-    #train_inputs = torch.tensor(train_inputs).long()
-    #train_labels = torch.tensor(train_labels).long()
-    #train_masks = torch.tensor(train_masks).long()
+    train_inputs = torch.tensor(train_inputs).long()
+    train_labels = torch.tensor(train_labels).long()
+    train_masks = torch.tensor(train_masks).long()
     test_inputs = torch.tensor(test_inputs).long()
     test_labels = torch.tensor(test_labels).long()
     test_masks = torch.tensor(test_masks).long()
 
     #9. DataLoader 생성
-    #train_dataset = TensorDataset(train_inputs, train_masks, train_labels)
-    #train_sampler = RandomSampler(train_dataset)
-    #train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
+    train_dataset = TensorDataset(train_inputs, train_masks, train_labels)
+    train_sampler = RandomSampler(train_dataset)
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
 
     test_data = TensorDataset(test_inputs, test_masks, test_labels)
     test_sampler = SequentialSampler(test_data)  # 순차적으로 순회 (정답 순서 보장)
@@ -479,7 +473,7 @@ if __name__ == '__main__':
     print(max_token_size)
 
     #10. 모델 학습 진행.
-    #training(model, device, train_dataloader)
+    training(model, device, train_dataloader)
 
     #11. 모델 검증(테스트) 진행.
     c_statistic = validation(test_dataloader)
