@@ -16,252 +16,14 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
 from torch.optim import AdamW
 
+nltk.download('punkt')      # 구두점 분리가 학습된 모델
+nltk.download('stopwords')  # 불용어 사전
 # 토큰화된 결과에서 유의미한 토큰이 가장 많았을 때의 개수
 max_token_size = 0
 
 stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 'or',
              'm', 's', '~', '"', '-',
              '.', ',', ':', '(', ')', '→', '[', ']', '/', '*', '=', '+', "'", '&', '#', '?', ';')
-
-
-def semi_preprocessing(text : str) -> str:
-    ##  4. 'ms'를 의미하는 수치 데이터 전처리.
-    tmp = text
-    text = re.sub(r'\b(\d+)\s*(MS|ms)\b|TE\s+(\d+)'
-                   , lambda m: (
-            f"ms-{m.group(1)}" if m.group(1) else  # \1: 숫자 (ms)
-            f"te ms-{m.group(3)}" if m.group(3) else ""  # TE 144 등의 ms없는 표현
-        ), text)
-
-    ##  5. % = percent 값 전처리.
-    text = re.sub(r'(\d+)\s*\%', r' percent-\1 ', text)  # 10%  --> percent-10
-
-    ##  6. Cho/NAA 수치 데이터 전처리.
-    #  Cho/Cr = 2.29,  Cho/NAA = 1.14
-    matches = re.findall(
-        r'\(?(Cho\-NAA|Cho\-Cr|[eE]vans\-index|[cC]allosal\-angle)(?:\s|\,|\=|increased)+((?:\d+(?:\.\d+)?(?:[, ;.]+)?)+)(?:\)?\.?| at|\()',
-        text)
-
-    if matches:
-        for grplist in matches:
-            # grplist: tuple → ('Cho-NAA', '0.85 0.79 0.90')
-            grp_values = grplist[1]  # 수치 문자열 전체
-            values = re.findall(r"\d+(?:\.\d+)?", grp_values)
-            for v in values:
-                if v == '': continue
-                tmp = re.sub(r'\.', '-', v)
-                text = re.sub(fr'\b{v}\b', fr' {grplist[0]}-{tmp} ', text)
-
-    ##  7. 'Cho/Cr, Cho/NAA 수치의 기준 값 전처리.
-    #  Cho/Cr = 2.29 (< 2.39). Cho/NAA = 1.14 (< 1.73).
-    matches = re.findall(r'(Cho\-Cr|Cho\-NAA)\-(\d+\-\d+)\s*\(?([<>])\s*(\d+(?:\.\d+))\)?\.?', text)
-    if matches:
-        for grplist in matches:
-            text = re.sub(fr'(?<={grplist[0]}-{grplist[1]})\s*\(?\<\s*', r' less-than ', text)
-            text = re.sub(fr'(?<={grplist[0]}-{grplist[1]})\s*\(?\>\s*', r' greater-than ', text)
-            tmp2 = grplist[3].replace('.', '-')
-            text = re.sub(fr'({grplist[0]}-{grplist[1]}\s*(greater|less)-than)\s*{grplist[3]}\)?\.?',
-                           fr' \1 {grplist[0]}-{tmp2} ', text)
-
-    ##  8. 'ADC' 수치 데이터 전처리.
-    #  ADC(avg) values of 0.862
-    text = re.sub(r'ADC.*value(?:s)?.*?(\d+(?:\.\d+)?)\s*\)?\.?', r' adc-\1 ', text)
-    text = re.sub(r'(adc-\d+)\.(\d+)', r' \1-\2 ', text)
-    text = re.sub(r'(adc-\d+-\d+)[ \-]+>+\s*(\d+(?:\.\d+)?)', r' \1 change adc-\2 ', text)
-    text = re.sub(r'(adc-\d+)\.(\d+)', r' \1-\2 ', text)
-
-    # 특수문자가 포함된 일반적인 ADC 수치 데이터 정형화.
-    matches = re.finditer(r'\(?(ADC)[ ,=]*(\d+(?:\.\d+)?(?:[, ]+\d+(?:\.\d+)?)*)\)\.?', text)
-    # Ftext = re.sub(r'\(?ADC\s*', r' ', Ftext)   # ADC 값 정형화 전 'ADC' 삭제
-
-    # (ADC 0.652, 1.062)    --> 'adc-0-652', 'adc-1-062'
-    if matches:
-        for grplist in matches:
-            grp_values = grplist.group(2)
-            values = re.findall(r"\d+(?:\.\d+)?", grp_values)
-            for v in values:
-                if v == '': continue
-                tmp = re.sub(r'\.', r'-', v)
-                text = re.sub(fr'{v}', fr'adc-{tmp}', text)
-
-    ##  9. Score 또는 검사 대상 수치 데이터 전처리
-    #  ex) SIH score = 1/10, cistern 1/1, collection 0/1 등
-    text = re.sub(r'(score|sinus|enhancement|collection|cistern(?:a)?|distance)\s*[ \=]*(\d+)\/(\d+)'
-                   , r' \1 pos-\2 tot-\3 '
-                   , text)  # 1/10   -->  'pos-1', 'tot-10'
-
-    ##  11. aneurysm의 4차원 값 표현 구분
-    # Length + Width + Height(Depth) + Neck
-    matches = re.findall(
-        r'(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*(x|X|\*)\s*(\d(?:\.\d{1,2})?)\s*\(neck\)\s*(mm|cm)',
-        text)
-    if matches:
-        for grplist in matches:
-            if grplist[-1] == 'mm':
-                # Length 정형화
-                if '.' in grplist[0]:
-                    Ltmp = str(int(round(float(grplist[0]))))
-                    Lvalue = re.sub(r'\.', r'\\.', grplist[0])
-                else:
-                    Ltmp, Lvalue = grplist[0], grplist[0]
-
-                # Width 정형화
-                if '.' in grplist[2]:
-                    Wtmp = str(int(round(float(grplist[2]))))
-                    Wvalue = re.sub(r'\.', r'\\.', grplist[2])
-                else:
-                    Wtmp, Wvalue = grplist[2], grplist[2]
-
-                # Height 정형화
-                if '.' in grplist[4]:
-                    Htmp = str(int(round(float(grplist[4]))))
-                    Hvalue = re.sub(r'\.', r'\\.', grplist[4])
-                else:
-                    Htmp, Hvalue = grplist[4], grplist[4]
-
-                # Neck 정형화
-                if '.' in grplist[6]:
-                    Ntmp = str(int(round(float(grplist[6]))))
-                    Nvalue = re.sub(r'\.', r'\\.', grplist[6])
-                else:
-                    Ntmp, Nvalue = grplist[6], grplist[6]
-
-                text = re.sub(
-                    fr'{Lvalue}\s*(x|X|\*)(?=\s*{Wvalue}\s*(x|X|\*)\s*{Hvalue}\s*(x|X|\*)\s*{Nvalue}\s*\(neck\)\s*mm)'
-                    , fr' Length-{Ltmp}mm '
-                    , text)
-
-                text = re.sub(
-                    fr'(?<=Length-{Ltmp}mm)\s*{Wvalue}\s*(x|X|\*)(?=\s*{Hvalue}\s*(x|X|\*)\s*{Nvalue}\s*\(neck\)\s*mm)'
-                    , fr' Width-{Wtmp}mm '
-                    , text)
-
-                text = re.sub(
-                    fr'(?<=Length-{Ltmp}mm Width\-{Wtmp}mm)\s*{Hvalue}\s*(x|X|\*)(?=\s*{Nvalue}\s*\(neck\)\s*mm)'
-                    , fr' Height-{Htmp}mm '
-                    , text)
-
-                text = re.sub(fr'(?<=Length-{Ltmp}mm Width-{Wtmp}mm Height-{Htmp}mm)\s*{Nvalue}\s*\(neck\)\s*mm'
-                               , fr' Neck-{Ntmp}mm '
-                               , text)
-
-    return text
-
-
-# 문장 토큰화를 통해 [CLS], [SEP] 토큰 추가하기.
-def sent_tokenizing(DSet: pd.DataFrame):
-    nltk.download('punkt')      # 구두점 분리가 학습된 모델
-    nltk.download('stopwords')  # 불용어 사전
-
-    sentences_list = []
-
-    # Findings, Conclusion 데이터를 모두 사용하므로 하나의 구성요소로 만든다.
-    for idx, Fs in enumerate(zip(DSet.Findings, DSet.Conclusion)):
-        # Findings에서 검사 시행 여부에 대한 내용은 삭제.
-        #Ftext = ' '.join(map(str, Fs[0].split('\n'))).strip()
-        Ftext = Fs[0].replace('\r', ' ')
-        #Ctext = ' '.join(map(str, Fs[1].split('\n'))).strip()
-        Ctext = Fs[1].replace('\r', ' ')
-        text = Ftext + ' ' + Ctext
-
-        text = prp.lobe_preprocessing(text)
-
-        sentences = sent_tokenize(text)  # text를 tokenizing한 문장.
-        Bert_sentences = ""
-        for s in sentences:
-            Bert_sentences += s + " __SEP__ "
-
-        text = Bert_sentences
-
-        text = semi_preprocessing(text)
-        text = prp.medical_words_preprocessing(text)
-        text = prp.cardi_ordinal_preprocessing(text)
-        text = prp.pos_neg_preprocessing(text)
-        text = prp.demention_preprocessing(text)
-        text = prp.unnecessary_preprocessing(text)
-
-        text = '[CLS] ' + text
-        text = re.sub(r'__SEP__', r'[SEP]', text)
-
-        while True:
-            new_text = re.sub(r'(?:\[(SEP|CLS)\])[ ]+\[SEP\]', r'[\1]', text)
-            if new_text == text:
-                break
-            text = new_text
-
-        # BERT에 적용할 Train Record 저장
-        sentences_list.append(text)
-
-    # print('---- BERT 형식의 문장 생성 예시 ----')
-    # print(sentences_list[100])
-    # print('--------------------------------')
-
-    return sentences_list
-
-
-def BERT_Tokenizing_Model(sentences: list):
-    global max_token_size
-
-    # 한글 호환되는 토크나이저로 한글 단어에 대한 토큰을 추출하고, 이를 다른 토크나이저의 vocab에 추가한다.
-    kor_tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-    kor_tokenizer.add_tokens(['폐쇄', '찢', '대뇌', '소뇌', '두통', '수술',
-                              '감소', '증가', '관찰'])     # [UNK]로 분류되는 단어 또는 의학 용어 추가.
-    for s in sentences :
-        kts = kor_tokenizer.tokenize(s)
-
-        words = []
-        current_word = ''
-        for token in kts:
-            if token.startswith('##'):
-                current_word += token[2:]
-            else:
-                if current_word:
-                    words.append(current_word)
-                current_word = token
-        if current_word:
-            words.append(current_word)
-
-        hangul_only = [token for token in words if re.fullmatch(r'[가-힣#]+', token)]
-        new_tokens = list(set(hangul_only))
-        tokens_to_add = [tok for tok in new_tokens if tok not in tokenizer_bert.get_vocab()]
-        tokenizer_bert.add_tokens(tokens_to_add)
-
-    # BERT Tokenizer 최대 길이 = 512
-    MAX_LEN = 512
-    tokenized_sentences = []
-
-    # [CLS] [SEP] 또는 [SEP] [SEP]가 발생하는 경우를 제거.
-    # 모든 텍스트를 소문자로 변환.
-    for s in sentences:
-        tokens = tokenizer_bert.tokenize(s)
-        tokens = [tok if tok in ['[CLS]', '[SEP]', '[UNK]'] else tok.lower()
-             for tok in tokens
-             if (tok in ['[CLS]', '[SEP]', '[UNK]']) or (tok.lower() not in stopwords)]
-
-        # if '[UNK]' in tokens:
-        #     print(tokens)
-        #     print(s)
-        #     print('#################################')
-        tokenized_sentences.append(tokens)
-
-    # 단어 토큰에 고유한 인덱스 번호를 부여하고, 패딩을 첨가해 시퀀스 생성.
-    input_ids = [tokenizer_bert.convert_tokens_to_ids(x) for x in tokenized_sentences]
-    input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="pre", padding="pre")
-
-
-    #유의미한 토큰을 계산하고 최댓값을 추출하기 위함 (445개).
-    for lst in input_ids:
-        cnt = 0
-        for l in lst:
-            if l == tokenizer_bert.pad_token_id : continue
-            cnt += 1
-        if max_token_size < cnt :
-            max_token_size = cnt
-            #print(tokenizer_bert.convert_ids_to_tokens(lst))
-            #print(cnt)
-
-    return input_ids
-
 
 
 def training(model : BertForSequenceClassification,
@@ -280,7 +42,7 @@ def training(model : BertForSequenceClassification,
     optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
 
     # 모델 에폭수
-    epochs = 3
+    epochs = 4
     # 총 훈련 스탭 = 배치 반복 횟수 * 에폭수
     total_steps = len(train_dataloader) * epochs
     # 스케줄러 생성
@@ -381,16 +143,19 @@ if __name__ == '__main__':
     kiumSet = pd.read_csv(r'.\TrainCopySet.csv')
     validSet = pd.read_csv(r'.\ValidationSet.csv')
 
-    # 학습/테스트 DataFrame
-    tdf = pd.DataFrame(kiumSet)
+    kdf = pd.DataFrame(kiumSet)
     vdf = pd.DataFrame(validSet)
+
+    # 학습/테스트 DataFrame
+    tdf = kdf.copy()
+    vdf = vdf.copy()
 
     # mim = 2000
     # lim = 2050
     # tdf = tdf.iloc[mim:lim]
 
     # 모델 저장/불러오기 경로
-    model_save_path = '../../saved_bert_model_3'
+    model_save_path = '../../saved_bert_model_5'
 
     # tokenizer ( PubMed 초록(abstract)만을 사용하여 처음부터 사전학습한 모델 )
     tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
