@@ -19,6 +19,7 @@ from transformers import BertForSequenceClassification, BertConfig
 from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import roc_auc_score, classification_report
+from transformers import BertTokenizerFast
 
 # Resource File Download
 nltk.download('punkt')      # 구두점 분리가 학습된 모델 (분리 규칙 모델)
@@ -26,7 +27,7 @@ nltk.download('stopwords')  # 불용어 사전
 #nltk.download('punkt_tab')
 
 # 학습 모델 저장/불러오기 경로 설정
-model_save_path = '../../saved_bert_model_4'
+model_save_path = '../../saved_bert_model_5'
 
 
 ## 토큰화 사전에 없는 용어(UNK) 추가
@@ -34,17 +35,38 @@ model_save_path = '../../saved_bert_model_4'
 #  bert-base-multilingual-cased : 다국어 지원 토크나이저
 #  microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract : 의학 소견/논문 바탕의 pretrained model
 vocab = ['찢어지는', '촤측', '없', '폐쇄', '상', '은', '과거', '않다', '없다', '보이다', '있다',
-         'unremarkable', 'gammaknife', 'GKRS', 'monoparesis', 'fenestration', 'rupture', 'infundibulum',
-         'microangiopathy', 'dysarthria', 'cistern', 'corona', 'radiata']
+         'unremarkable', 'gammaknife', 'GKRS', 'monoparesis', 'fenestration', 'infundibulum',
+         'microangiopathy', 'dysarthria', 'cistern', 'corona', 'radiata', 'v4', 'cerebrum', 'encephalomalacic',
+         'visualization', 'pansinusitis', 'cavernous', 'hie', 'ethmoid', '##mm', 'tinitus', 'sphenoid', 'burr',
+         'hemiparesis', 'cranioplasty', 'vertigo', 'orthostatic', 'sinusitis', 'communicating', 'tfca', 'pvwm',
+         'cavernous_petrous', 'otomastoiditis', 'ivh', 'hyponatremia', 'falx', 'peduncle', 'diaphysis',
+         'tuberosity', 'abutment', 'aica', 'behcet', 'craniotomy', 'hyperintense', 'addendum', 'riding', 'onyx',
+         'avm', 'recanalization', 'convexity', 'angiogram', 'hemangioblastoma', 'leukoencephalopathy', 'encephalomalacia',
+         'retreatment', 'postop', 'craniectomy', 'hemangioma', 'operculum', 'occiput', 'regrowth', 'schwannoma',
+         'trephination', 'moyamoya', 'craniectomy', 'aqueduct', 'oligodendroglioma', 'acha', 'uia', 'hemosiderin',
+         'meckel', 'xanthogranuloma', 'trigone', 'neurofibromatosis', 'venography', 'vao', 'meningioma', 'dva',
+         'clivus', 'nidus', 'edh', 'hygroma', 'hemosiderosis', 'nasopharynx', 'agenesis', 'contusion', 'ccf',
+         'angiopathy', 'infundibula', 'meningoencephalitis', 'ventriculitis', 'mastoidectomy', 'dumbbell',
+         'mrv', 'avf', 'fissure', 'myokymia', 'thunderclap', 'rcvs', 'vermis', 'lacunar', 'azygos', 'amnesia',
+         'wernicke', 'cavernoma', 'meniere', 'vba', 'neuralgia', 'vasodilatation', 'hypernatremia', 'diplopia',
+         'thrombectomy', 'hemicraniectomy', 'transtentorial', 'hyperemia', 'mastoiditis', 'pallidus', 'globus',
+         'meningeal', 'macroadenoma', 'paresthesia', 'paramedian', 'subfalcine', 'cvst', 'tegmen',
+         'disorientation', 'cerebellopontine', 'prepontine', 'tentorium', 'pterygoid', 'wallenberg',
+         'meningocele', 'isthmus', 'aplasia', 'blister', 'anteroinferior', 'anomia', 'postictal', 'hemisphere',
+         'codominant', 'hypoplastic', 'nonhemorrhagic', 'wallerian', 'mutism', 'mucocele', 'tuberculoma',
+         'lenticulostriate', 'thrombophlebitis', 'tornwaldt', 'vasospasm', 'aliasing', 'tectum',
+         'pseudolesion', 'hyperattenuation', 'thalamoperforator', 'staphyloma', 'eyeball', 'flair']
 
 tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
 tokenizer_bert.add_tokens(vocab)
+# 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
+#microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext
 #tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 
 ## 불용어 토큰 제거 Tuple.
 # '-', '_'는 의미 구분 목적으로 사용할 것이므로 제외하지 않음.
 stopwords = ('and', 'at', 'a', 'an', 'as', 'are', 'b', 'in', 'to', 'the', 'of', 'or',
-             'm', 's',
+             'm', 's', 'y',
              '가', '과', '그', '그리고', '는', '년', '등의', '또는', '로', '및', '볼', '분', '수', '서',
              '에서', '이에', '이', '인', '의', '외', '와', '을', '인해', '에는', '에', '에도',
              '중', '지', '현', '함', '~', '"',
@@ -114,10 +136,14 @@ def sent_tokenizing(df : pd.DataFrame):
     # ex) e.g, Rt. 등
     df.loc[:, 'context'] = (
         df['context']
-        .str.replace(r'[rR][tT](\.|\s|$)', r' right ', regex=True)
-        .str.replace(r'[lL][tT](\.|\s|$)', r' left ', regex=True)
-        .str.replace(r'[eE]\.[gG]', r'example', regex=True)
+        .str.replace(r'\b[rR][tT](\.|\s|$)', r' right ', regex=True)
+        .str.replace(r'\b[lL][tT](\.|\s|$)', r' left ', regex=True)
+        .str.replace(r'\b[eE]\.[gG]', r'example', regex=True)
     )
+
+    # __SEP__ 토큰을 붙이기 전에 '.'이 포함된 불용어 등을 우선 제거함.
+    unnecessary_preprocessing(df)
+    print('불필요 용어 처리 완료')
 
     index_list = df.index.tolist()
     for idx in index_list:
@@ -149,84 +175,109 @@ def lobe_preprocessing(df : pd.DataFrame):
     # 오타 정정
     df.loc[:, 'context'] = (
         df['context']
-        .str.replace(   # cerebellum 오타 정정.
-            r'cerebelli\.'
+        .str.replace(   # cerebellum 오타 및 표현 정정.
+            r'cerebelli(\.)?|cerbellum|cerebelllum'
             , r'cerebellum'
             , regex=True
         )
+        .str.replace(   # 대뇌 (cerebri) 표현 정정 및 오타 수정
+            r'cerebri'
+            , r'cerebrum'
+            , regex=True
+        )
         .str.replace(   # right 오타 = ight
-            r'\bight'
+            r'\bight|rigth|\brigh\s|\brightt\s'
             , r'right'
+            , regex=True
+        )
+        .str.replace(   # parietal 오타 수정
+            r'pareital'
+            , r'parietal'
+            , regex=True
+        )
+        .str.replace(   # frontal 오타 수정
+            r'fronrtal|forntal'
+            , r'frontal'
+            , regex=True
+        )
+        .str.replace(   # occipital 오타 수정
+            r'occipical'
+            , r'occipital'
             , regex=True
         )
     )
 
     df.loc[:, 'context'] = (
         df['context']
+        .str.replace(   # both 4개 항목
+            r'(at )?(the )?[Bb]oth\s*[FTPO]-[FTPO]-[FTPO]-[FTPO]\s*(lobe(s)?)?'
+            , r' right-temporal-lobe right-parietal-lobe right-occipital-lobe right-frontal-lobe left-temporal-lobe left-parietal-lobe left-occipital-lobe left-frontal-lobe '
+            , regex=True
+        )
         .str.replace(  #  both, bilateral 'parietal' + 'temporal' + 'occipital'
             r'[Bb]oth\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|occipital)[ &,-]*(temporal|parietal|occipital)(\,|\s|\&|and|\-)*(temporal|parietal|occipital)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
-            r'(at )?(the )?([Bb]ilateral|[bB]oth|양측) (parieto|temporo|occipito)[ \-,]*(parieto|temporo|occipito)[ \-,]*(occipital|temporal|parietal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=fronto)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(temporal|parietal|occipital)[ &,-]*(temporal|parietal|occipital)(\,|\s|\&|and|\-)*(temporal|parietal|occipital)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+            r'(at )?(the )?([Bb]ilateral|[bB]oth|양측)\s*(parieto|temporo|occipito)[ \-,]*(parieto|temporo|occipito)[ \-,]*(occipital|temporal|parietal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=fronto)))'
             , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe left-temporal-lobe left-parietal-lobe left-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  both, bilateral 'frontal' + 'parietal' + 'temporal'
             r'[Bb]oth\s*[PTF]\-[PTF]\-[PTF]\s*((lobe|area)(s)?)?|'
             r'(at )?the.*?([Bb]ilateral|[Bb]oth|양측).*frontal parietal temporal lobe(s)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal|frontal)[ &,]*(temporal|parietal|frontal)(\,|\s|\&|and|\-|및)*(temporal|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right|[lL]t|[rR]t))|'
-            r'(at )?(the)?([Bb]ilateral|[Bb]oth|양측) (fronto|parieto|temporo)[ ,\-]*(fronto|parieto|temporo)[ ,\-]*(frontal|parietal|temporal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=occipit)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(temporal|parietal|frontal)[ &,]*(temporal|parietal|frontal)(\,|\s|\&|and|\-|및)*(temporal|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right|[lL]t|[rR]t))|'
+            r'(at )?(the)?([Bb]ilateral|[Bb]oth|양측)\s*(fronto|parieto|temporo)[ ,\-]*(fronto|parieto|temporo)[ ,\-]*(frontal|parietal|temporal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=occipit)))'
             , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe right-temporal-lobe right-parietal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  both, bilateral 'frontal' + 'parietal' + 'occipital'
             r'[Bb]oth\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal|frontal)[ &,]*(occipital|parietal|frontal)(\,|\s|\&|and|\-)*(occipital|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (fronto|parieto|occipito)[ ,\-&]*(fronto|parieto|occipito)[ ,\-&]*(occipital|parietal|frontal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=tempor)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(occipital|parietal|frontal)[ &,]*(occipital|parietal|frontal)(\,|\s|\&|and|\-)*(occipital|parietal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(fronto|parieto|occipito)[ ,\-&]*(fronto|parieto|occipito)[ ,\-&]*(occipital|parietal|frontal)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=tempor)))'
             , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe right-occipital-lobe right-parietal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  both, bilateral 'frontal' + 'temporal' + 'occipital'
             r'[Bb]oth\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|temporal|frontal)[ &,]*(occipital|temporal|frontal)(\,|\s|\&|and|\-)*(occipital|temporal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (fronto|temporo|occipito)[ &,\-]*(fronto|temporo|occipito)[ &,\-]*(frontal|temporal|occipital)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=pariet)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(occipital|temporal|frontal)[ &,]*(occipital|temporal|frontal)(\,|\s|\&|and|\-)*(occipital|temporal|frontal)\s*(lobe(s)?|(\.|\,|and|\s)*(?=left|right))|'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(fronto|temporo|occipito)[ &,\-]*(fronto|temporo|occipito)[ &,\-]*(frontal|temporal|occipital)\s*((lobe|area)s?|(\.|\,|and|\s)*((?=left|right|[lL]t|[rR]t)|(?!=pariet)))'
             , ' left-occipital-lobe left-temporal-lobe left-frontal-lobe right-occipital-lobe right-temporal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  both 'parietal' + 'temporal'
             r'[Bb]oth\s*[PT]\-[PT]\s*(lobe(s)?)?|both parieto-temporo-parietal lobe(s)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (temporal|parietal)(\.|\,|and|\s|\&)*(temporal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))|'
-            r'(at )?(the )?([Bb]ilateral|[bB]oth|양측) (parieto|temporo)[\- ,]*(parietal|temporal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(temporal|parietal)(\.|\,|and|\s|\&)*(temporal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))|'
+            r'(at )?(the )?([Bb]ilateral|[bB]oth|양측)\s*(parieto|temporo)[\- ,]*(parietal|temporal)\s*(lobe(s)?|(\.|\,|and|\s)*((?=left|right)|(?!=occipit|front)))'
             , ' right-temporal-lobe right-parietal-lobe left-temporal-lobe left-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  both 'parietal' + 'occipital'
             r'[Bb]oth\s*[PO]\-[PO]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (occipital|parietal|parieto|occipito)(\.|\,|and|\s|\&|\-)*(occipital|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|front)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(occipital|parietal|parieto|occipito)(\.|\,|and|\s|\&|\-)*(occipital|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|front)))'
             , ' right-occipital-lobe right-parietal-lobe left-occipital-lobe left-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  both 'parietal' + 'frontal'
             r'([Bb]oth|the [Bb]ilateral)\s*[PF]\-[PF]\s*(lobe(s)?)?|'
-            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|parietal|fronto|parieto)(\.|\,|and|\s|\&|\-|lobe)*(frontal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|occipit)))'
+            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측)\s*(frontal|parietal|fronto|parieto)(\.|\,|and|\s|\&|\-|lobe)*(frontal|parietal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=tempor|occipit)))'
             , ' right-parietal-lobe right-frontal-lobe left-parietal-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  both 'temporal' + 'occipital'
             r'[Bb]oth\s*[TO]\-[TO]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측) (tempor|occipit?)(al|o)?(\.|\,|and|\s|\&|\-)*(temporal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=pariet|front)))'
+            r'(at )?(the )?([Bb]ilateral|[Bb]oth|양측)\s*(tempor|occipit?)(al|o)?(\.|\,|and|\s|\&|\-)*(temporal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=left|right)|(?!=pariet|front)))'
             , ' right-temporal-lobe right-occipital-lobe left-temporal-lobe left-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  both 'temporal' + 'frontal'
             r'[Bb]oth\s*[TF]\-[TF]\s*(lobe(s)?)?|'
-            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|fronto|temporal|temporo)(\.|\,|and|\s|\-|\&)*(frontal|temporal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|occipit)))'
+            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측)\s*(frontal|fronto|temporal|temporo)(\.|\,|and|\s|\-|\&)*(frontal|temporal)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|occipit)))'
             , ' right-temporal-lobe right-frontal-lobe left-temporal-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  both 'occipital' + 'frontal'
             r'[Bb]oth\s*[OF]\-[OF]\s*(lobe(s)?)?|'
-            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (frontal|fronto|occipital|occipito)(\.|\,|and|\s|\-|\&)*(frontal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|tempor)))|'
-            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측) (front|occipit)(al|o)( lobes?)?[ ,]*(front|occipit)(al|o)\s*lobes?'
+            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측)\s*(frontal|fronto|occipital|occipito)(\.|\,|and|\s|\-|\&)*(frontal|occipital)\s*((area|lobe)s?|(\.|\,|and|\s)*((?=[Ll]eft|[Rr]ight)|(?!=pariet|tempor)))|'
+            r'(at )?([Tt]he )?([Bb]ilateral|[Bb]oth|양측)\s*(front|occipit)(al|o)( lobes?)?[ ,]*(front|occipit)(al|o)\s*lobes?'
             , ' right-occipital-lobe right-frontal-lobe left-occipital-lobe left-frontal-lobe '
             , regex=True
         )
@@ -270,154 +321,154 @@ def lobe_preprocessing(df : pd.DataFrame):
             , regex=True
         )
         .str.replace(  #  right 4개 항목
-            r'(at )?(the )?([rR]ight|[rR]t\.?) (frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)( |\,|and)*(frontal|parietal|temporal|occipital)[ ,]*(lobe|area)s?'
+            r'(at )?(the )?([rR]ight|[rR]t\.?)\s*(frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)[ ,]*(frontal|parietal|temporal|occipital)( |\,|and)*(frontal|parietal|temporal|occipital)[ ,]*(lobe|area)s?'
             , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'temporal' + 'occipital'
             r'(at )?(the )?([rR]ight|[rR]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occ(i)?pit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front))|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) [PTO]+\(((pariet|tempor|occipit)(al|o)|\s|\-)+\)\s*lobes?\.?'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occ(i)?pit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front))|'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*[PTO]+\(((pariet|tempor|occipit)(al|o)|\s|\-)+\)\s*lobes?\.?'
             , ' right-temporal-lobe right-parietal-lobe right-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'temporal' + 'frontal'
             r'(at )?(the )?([rR]ight|[rR]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor|fron(t)?)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(pariet|tempor|fron(t)?)(al|o)[, &\-]*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit))'
             , ' right-temporal-lobe right-parietal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'occipital' + 'frontal'
             r'(at )?(the )?([rR]ight|[rR]t)\.?\s*[POF]\-[POF]\-[POF]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit|front)(al|o)[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(pariet|occipit|front)(al|o)[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor))'
             , ' right-occipital-lobe right-parietal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'temporal' + 'occipital' + 'frontal'
             r'(at )?(the )?([rR]ight|[rR]t)\.?\s*[TOF]\-[TOF]\-[TOF]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=pariet))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=pariet))'
             , ' right-occipital-lobe right-temporal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'temporal'
             r'(at )?(the )?([Rr](i)?ght|[rR]t)\.?\s*[PT]\-[PT]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|tempor)(al|o)(\,|\s|\&|and|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|front))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(pariet|tempor)(al|o)(\,|\s|\&|and|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|front))'
             , ' right-temporal-lobe right-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'occipital'
             r'(at )?(the )?(right|[rR]t)\.?\s*[PO]\-[PO]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (pariet|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|front))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|front))'
             , ' right-occipital-lobe right-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal' + 'frontal'
             r'(at )?(the )?(right|[rR]t)\.?\s*[FP](\-|\, )[FP]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([rR]ight|[rR]t\.?) (front|pariet)(al|o)(\,|\s|\&|and|\-|lobe)*(front|pariet)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|occipit))'
+            r'(at )?(the )?([rR]ight|[rR]t\.?)\s*(front|pariet)(al|o)(\,|\s|\&|and|\-|lobe)*(front|pariet)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|occipit))'
             , ' right-frontal-lobe right-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'temporal' + 'occipital'
             r'(at )?(the )?(right|[rR]t)\.?\s*[TO]\-[TO]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front|pariet))'
+            r'(at )?(the )?([rR]ight|[rR]t\.?)\s*(tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=front|pariet))'
             , ' right-temporal-lobe right-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  right 'temporal' + 'frontal'
             r'(at )?(the )?(right|[rR]t)\.?\s*[FT]\-[FT]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([rR]ight|[rR]t\.?) (tempor|f(ro|or)nt)(al|o)(\,|\s|\&|and|\-)*(tempor|front|temopr)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|pariet))'
+            r'(at )?(the )?([rR]ight|[rR]t\.?)\s*(tempor|f(ro|or)nt)(al|o)(\,|\s|\&|and|\-)*(tempor|front|temopr)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=occipit|pariet))'
             , ' right-temporal-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'occipital' + 'frontal'
             r'(at )?(the )?(right|[rR]t)\.?\s*[OF]\-[OF]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Rr]ight|[rR]t\.?) (occipit|front)(al|o)(\,|\s|\&|and|\-)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|pariet))'
+            r'(at )?(the )?([Rr]ight|[rR]t\.?)\s*(occipit|front)(al|o)(\,|\s|\&|and|\-)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=left|both)|(?!=tempor|pariet))'
             , ' right-occipital-lobe right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'parietal'
             r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) P[ ,).]|'
-            r'(at )?(the )?([Rr]ight|[rR][tT]\.?) (pari(e)?t|paret)(al?|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(occipit|front|tempor)))|'
+            r'(at )?(the )?([Rr]ight|[rR][tT]\.?)\s*(pari(e)?t|paret)(al?|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(occipit|front|tempor)))|'
             r'우측 두정엽'
             , ' right-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'temporal'
             r'([rR][Tt]\.?|[Rr]ight) T[ ,).]|'
-            r'(at )?(the )?([Rr]ight|[rR][tT]\.?) tempor(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?[.-]*|(?=left|both)|(?!=(occipit|front|pariet)))|'
+            r'(at )?(the )?([Rr]ight|[rR][tT]\.?)\s*tempor(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?[.-]*|(?=left|both)|(?!=(occipit|front|pariet)))|'
             r'우측 측두엽'
             , ' right-temporal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'occipital'
             r'([rR][Tt]\.?|[Rr]ight) O[ ,).]|'
-            r'(at )?(the )?([Rr]ight|[rR][tT]\.?) (occ(i)?pit|occipti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(pariet|front|tempor)))|'
+            r'(at )?(the )?([Rr]ight|[rR][tT]\.?)\s*(occ(i)?pit|occipti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=left|both)|(?!=(pariet|front|tempor)))|'
             r'우측 후두엽'
             , ' right-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  right 'frontal'
             r'([rR][Tt]\.?|[Rr]ight) F[ ,).]|'
-            r'(at )?(the )?([Rr]ig(ht|th)|[rR][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=[Ll]eft|[lL]t|both)|(?!=(pariet|occipit|tempor)))|'
+            r'(at )?(the )?([Rr]ig(ht|th)|[rR][tT]\.?)\s*front(al|o)(\,|\s|\&|and|\-)*((lobe|area)(s|에)?\.?|(?=[Ll]eft|[lL]t|both)|(?!=(pariet|occipit|tempor)))|'
             r'우측 전두엽'
             , ' right-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  right 'cerebellum'
-            r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) ([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?'
+            r'(at )?(the )?([rR][Tt]\.?|[Rr]ight)\s*([cC][Bb][lL][lL]|cerebellum|cerebellar)\.?'
             , ' right-cerebellum '
             , regex=True
         )
         .str.replace(  #  right 'cerebrum'
-            r'(at )?(the )?([rR][Tt]\.?|[Rr]ight) (cer(e)?bral|cerebrum)\.?'
+            r'(at )?(the )?([rR][Tt]\.?|[Rr]ight)\s*(cer(e)?bral|cerebrum)\.?'
             , ' right-cerebrum '
             , regex=True
         )
         .str.replace(  #  left 4개 항목
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (front|pariet|tempor|occipit)(al|o)[ ,\-]*(front|pariet|tempor|occipit)(al|o)[ ,\-]*(front|pariet|tempor|occipit)(al|o)( |\,|and|\-)*(front|pariet|tempor|occipit)(al|o)[ ,]*(lobe|area)s?'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(front|pariet|tempor|occipit)(al|o)[ ,\-]*(front|pariet|tempor|occipit)(al|o)[ ,\-]*(front|pariet|tempor|occipit)(al|o)( |\,|and|\-)*(front|pariet|tempor|occipit)(al|o)[ ,]*(lobe|area)s?'
             , ' left-temporal-lobe left-parietal-lobe left-occipital-lobe left-frontal-lobe left-cerebellum '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'temporal' + 'ocipital'
             r'([Ll]eft|[lL]t)\.?\s*[PTO]\-[PTO]\-[PTO]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=front))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(pariet|tempor|occipit)(al|o)[, &\-]*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=front))'
             , ' left-temporal-lobe left-parietal-lobe left-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'temporal' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[PTF]\-[PTF]\-[PTF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|tempor|front|fornt)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=occipit))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(pariet|tempor|front|fornt)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*(pariet|tempor|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=occipit))'
             , ' left-temporal-lobe left-parietal-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'occipital' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[POF]\-[POF]\-[POF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (pariet|occipit|front)(al|o)(\s*\(prefrontal gyrus\))?[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=tempor))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(pariet|occipit|front)(al|o)(\s*\(prefrontal gyrus\))?[, &\-]*(pariet|occipit|front)(al|o)(\,|\s|\&|and|\-)*(pariet|occ(i)?pit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=tempor))'
             , ' left-occipital-lobe left-parietal-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'temporal' + 'occipital' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[TOF]\-[TOF]\-[TOF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=pariet))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(tempor|occipit|front)(al|o)[, &\-]*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*(tempor|occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[Rr]ight|both)|(?!=pariet))'
             , ' left-temporal-lobe left-occipital-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'temporal'
             r'([Ll]eft|[lL]t)\.?\s*[PT]\-[PT]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([Ll]eft|[lL]t\.?) (pariet|tempor)(al|o)( |and|\,|\&|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|occipit))'
+            r'(at )?(the )?([Ll]eft|[lL]t\.?)\s*(pariet|tempor)(al|o)( |and|\,|\&|\-|lobe)*(pariet|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|occipit))'
             , ' left-temporal-lobe left-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'occipital'
             r'([Ll]eft|[lL]t)\.?\s*[PO]\-[PO]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (pari(et|te)|occipit)(al|o)( |\&|\,|and|\-|lobe)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|tempor))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(pari(et|te)|occipit)(al|o)( |\&|\,|and|\-|lobe)*(pariet|occipit)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=front|tempor))'
             , ' left-occipital-lobe left-parietal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[PF]\-[PF]\s*((lobe|area)(s)?)?|'
             r'the left.*?F, P lobes|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (front|pariet)(al|o)( |\&|\,|and|\-|lobe)*(front|pariet|paro)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|tempor))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(front|pariet)(al|o)( |\&|\,|and|\-|lobe)*(front|pariet|paro)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|tempor))'
             , ' left-frontal-lobe left-parietal-lobe '
             , regex=True
         )
@@ -429,19 +480,19 @@ def lobe_preprocessing(df : pd.DataFrame):
         )
         .str.replace(  #  left 'temporal' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[FT]\-[FT]\s*((lobe|area)(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (front|tempor)(al|o)(\s|\&|\,|and|\-|lobe)*(front|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|pariet))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(front|tempor)(al|o)(\s|\&|\,|and|\-|lobe)*(front|tempor)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=occipit|pariet))'
             , ' left-temporal-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'occipital' + 'frontal'
             r'([Ll]eft|[lL]t)\.?\s*[OF]\-[OF]\s*(lobe(s)?)?|'
-            r'(at )?(the )?([lL]eft|[lL]t\.?) (occipit|front)(al|o)(\s|\&|\,|and|\-|lobe)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=pariet|tempor))'
+            r'(at )?(the )?([lL]eft|[lL]t\.?)\s*(occipit|front)(al|o)(\s|\&|\,|and|\-|lobe)*(occipit|front)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=pariet|tempor))'
             , ' left-occipital-lobe left-frontal-lobe '
             , regex=True
         )
         .str.replace(  #  left 'parietal'
             r'([lL][Tt]\.?|[Ll]eft) P[ ,)]|'
-            r'(at )?(the )?([Ll]eft|[lL][Tt]\.?|elft) (p(a)?riet|parite)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|tempor)))|'
+            r'(at )?(the )?([Ll]eft|[lL][Tt]\.?|elft)\s*(p(a)?riet|parite)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|occipit|tempor)))|'
             r'좌측 두정엽'
             , ' left-parietal-lobe '
             , regex=True
@@ -455,14 +506,14 @@ def lobe_preprocessing(df : pd.DataFrame):
         )
         .str.replace(  #  left 'occipital'
             r'([lL][Tt]\.?|[Ll]eft) O[ ,)]|'
-            r'(at )?(the )?([lL]eft|[lL][Tt]\.?) (occ(i)?pit|occip(i)?ti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|pariet|tempor)))|'
+            r'(at )?(the )?([lL]eft|[lL][Tt]\.?)\s*(occ(i)?pit|occip(i)?ti)(al|o)(\,|\s|\&|and|\-)*((lobe|area)s?\.?|(?=[rR]ight|both)|(?!=(front|pariet|tempor)))|'
             r'좌측 후두엽'
             , ' left-occipital-lobe '
             , regex=True
         )
         .str.replace(  #  left 'frontal'
             r'([lL][Tt]\.?|[Ll]eft) F[ ,):]|'
-            r'(at )?(the )?([Ll]e(f)?t|[lL][tT]\.?) front(al|o)(\,|\s|\&|and|\-)*((lobe|area|\,)s?\.?|(?=[rR]ight|both)|(?!=(occipit|pariet|tempor)))|'
+            r'(at )?(the )?([Ll]e(f)?t|[lL][tT]\.?)\s*front(al|o)(\,|\s|\&|and|\-)*((lobe|area|\,)s?\.?|(?=[rR]ight|both)|(?!=(occipit|pariet|tempor)))|'
             r'좌측 전두엽'
             , ' left-frontal-lobe '
             , regex=True
@@ -501,6 +552,26 @@ def lobe_preprocessing(df : pd.DataFrame):
         .str.replace(  # 'orbitofrontal'
             r'([rR]ight|[lL]eft|[bB]oth)\s*orbitofrontal\s*(?:lobe|area)(s)?'
             , ' \1-orbitofrontal-lobe '
+            , regex=True
+        )
+        .str.replace (  #   Frontotemporal
+            r'[fF]rontotemporal'
+            , r' frontal-lobe temporal-lobe'
+            , regex=True
+        )
+        .str.replace(   # frontoparietal
+            r'[Ff]rontoparietal'
+            , r'frontal-lobe parietal-lobe'
+            , regex=True
+        )
+        .str.replace(   # parietal + temporal
+            r'parietotemporal (lobe|area)s?'
+            , r'parietal-lobe temporal-lobe'
+            , regex=True
+        )
+        .str.replace(   # occipital + temporal
+            r'(occipit|tempor)(o|al)[ \-]*(occipit|tempor)(o|al)( (lobe|area)s?)?'
+            , r'occipital-lobe temporal-lobe'
             , regex=True
         )
     )
@@ -647,7 +718,6 @@ def semi_preprocessing(df : pd.DataFrame):
         )
     )
 
-
     # 한국어 표현의 정형화
     df.loc[:, 'context'] = (
         df['context']
@@ -667,7 +737,7 @@ def semi_preprocessing(df : pd.DataFrame):
             , regex=True
         )
         .str.replace(
-            r'보(임|이다|이며|인다|이는|이고|여)'
+            r'보(임|이다|이며|인다|이는|이고|여|였던)'
             , '보이다'
             , regex=True
         )
@@ -690,9 +760,10 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             r'(axial[\- ]+T2WI)?[, ]*(axial[\- ]+FLAIR)?[, ]*'
             r'(axial[\- ]+T2\*)?[, ]*(axial[\- ]+t2_star)?[, ]*(GRE image)?[, ]*(axial[\- ]+DWI)?[, ]*'
             r'(intracranial[\- ]+TOF[\- ]+MRA)?[, ]*(axial[\- ]+FLAIR)?[, ]*'
-            r'(neck[\- ]+TOF[\- ]+MRA)?[, ]*.*조영증강[은을 ]+시행(함|하지 않았?음)\.?|'
-            r'White matter tract evaluation.*diffusion tensor imaging 시행(함|하지 않았?음)\.?|'
-            r'(MR brain venography|PC3D Brain MR venography).*시행(함|하지 않았?음)\.?'
+            r'(neck[\- ]+TOF[\- ]+MRA)?[, ]*.*?조영증강[은을 ]+시행(함|하지 않(았?음|다))\.?|'
+            r'White matter tract evaluation.*diffusion tensor imaging 시행(함|하지 않(았?음|다))\.?|'
+            r'(MR brain venography|PC3D Brain MR venography).*시행(함|하지 않(았?음|다))\.?|'
+            r'((?<=\w)[`\'’]([Ss]|\s)*)'   # Parkinson's
             , ' '
             , regex=True
             , flags = re.IGNORECASE
@@ -710,6 +781,11 @@ def medical_words_preprocessing(df : pd.DataFrame) :
         .str.replace(   # (CE)
             r'\(CE\)'
             , ' contrast-enhancement '
+            , regex=True
+        )
+        .str.replace(   # Sx. = Symptoms 증상
+            r'Sx\.'
+            , r'symptoms'
             , regex=True
         )
         .str.replace(   # (Non CE)
@@ -796,7 +872,7 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , regex=True
         )
         .str.replace(   # Clinical information, CI:, CI,  (삭제 목적)
-            r'Clinical information\s*:|\*\s*CI\s?:|C\.?I[,: ;]+'
+            r'Clinical information\s*:?|\*\s*CI\s?:|C\.?I[,: ;]+'
             , ''
             , regex=True
         )
@@ -821,7 +897,7 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , regex=True
         )
         .str.replace(   # f/u, f-u, f.u
-            r'[Ff][./-][Uu]|follow up|follow\-up|'
+            r'[Ff][./-][Uu]|follow up|[Ff]ollow\-up|'
             r'Fu (?=MR(I|A))'
             , ' follow_up '
             , regex=True
@@ -895,7 +971,10 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , regex=True
         )
         .str.replace(   # Non specific 관련
-            r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|[nN]on\s*specific|비특이적'
+            r'\b[Nn][./-][sS]|[nN]on?( other)? [sS]ignificant|without significant change|[nN]o evidence of significant|비특이적|'
+            r'[uU]nspecified|[nN]on(\s|\-)*specific|'
+            r'[Nn]o[ \-]*(singnific?ant|signifiant|significnat)|'
+            r'[Nn]o[ \-]*(significant|specific)'
             , ' non_specific '
             , regex=True
         )
@@ -991,7 +1070,7 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , regex=True
         )
         .str.replace(   # 뒤에 복수형으로 붙는 약어들
-            r'(ICA|ICH|PCA|SDH|SAH|EVD|VA|ACA|MCA|BG|CCA)s'
+            r'(ICA|ICH|PCA|SDH|SAH|EVD|VA|ACA|MCA|BG|CCA|EOM|SCA)s'
             , r'\1'
             , regex=True
         )
@@ -1011,7 +1090,7 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , regex=True
         )
         .str.replace(   # 중이-꼭지돌기염, 유양돌기염
-            r'중이-?(꼭지|유양)돌기염'
+            r'중이-?(꼭지|유양)돌기염|otoamstoiditis'
             , r' otomastoiditis '
             , regex=True
         )
@@ -1065,19 +1144,398 @@ def medical_words_preprocessing(df : pd.DataFrame) :
             , r' sequence '
             , regex=True
         )
+        .str.replace(   # encephalomalacic 오타 수정
+            r'[Ee]ncepahlomalacic'
+            , r'encephalomalacic'
+            , regex=True
+        )
+        .str.replace(   # ophthalmic 오타 수정
+            r'opthalmic'
+            , r'ophthalmic'
+            , regex=True
+        )
+        .str.replace(   # artery 오타 수정
+            r'arteyr'
+            , r'artery'
+            , regex=True
+        )
+        .str.replace(
+            r'[pP]robabable'
+            , r'probable'
+            , regex=True
+        )
+        .str.replace(   # appeared 오타 수정
+            r'appearaed'
+            , r'appeared'
+            , regex=True
+        )
+        .str.replace(   # distal 오타 수정
+            r'ditsal'
+            , r'distal'
+            , regex=True
+        )
+        .str.replace(   # hemorrhagic 오타 수정
+            r'hemorragic|hemorrahgic'
+            , r'hemorrhagic'
+            , regex=True
+        )
+        .str.replace(   # brain 오타 수정
+            r'brian'
+            , r'brain'
+            , regex=True
+        )
+        .str.replace(   # encephalopathy 오타 수정
+            r'encpehalopathy'
+            , r'encephalopathy'
+            , regex=True
+        )
+        .str.replace(   # arterial 오타 수정
+            r'areterial'
+            , r'arterial'
+            , regex=True
+        )
+        .str.replace(   # choroidal 오타 수정
+            r'coroidal'
+            , r'choroidal'
+            , regex=True
+        )
+        .str.replace(   # hemisphere 오타 수정
+            r'hemphere'
+            , r'hemisphere'
+            , regex=True
+        )
+        .str.replace(   # paraclinoid 오타 수정
+            r'paraclinoic'
+            , r'paraclinoid'
+            , regex=True
+        )
+        .str.replace(   # radiata 오타 수정
+            r'\bridiata|\bradaita\s|\braidata\s'
+            , r'radiata '
+            , regex=True
+        )
+        .str.replace(   # acute 오타 수정
+            r'Acuet|\bacut\s|aucte'
+            , r'acute '
+            , regex=True
+        )
+        .str.replace(   # basal 오타 수정
+            r'\bbaal\s'
+            , r'basal '
+        )
+        .str.replace(   # subacute 오타 수정
+            r'sbuacute|[sS]ubactue\s'
+            , r'subacute '
+            , regex=True
+        )
+        .str.replace(   # abnormal 오타 수정
+            r'abnomral'
+            , r'abnormal'
+            , regex=True
+        )
+        .str.replace(   # cyst 오타 수정
+            r'\bcsyt\s'
+            , r'cyst '
+            , regex=True
+        )
+        .str.replace(   # cytotoxic 오타 수정
+            r'cytotixic'
+            , 'cytotoxic'
+            , regex=True
+        )
+        .str.replace(   # weakness 오타 수정
+            r'weakenss'
+            , r'weakness'
+            , regex=True
+        )
+        .str.replace(   # occlusion 오타 수정
+            r'occulusion'
+            , r'occlusion'
+            , regex=True
+        )
+        .str.replace(   # midbrain 오타 수정
+            r'midrain'
+            , r'midbrain'
+            , regex=True
+        )
+        .str.replace(   # restriction 오타 수정
+            r'restrction|retriction'
+            , r'restriction'
+            , regex=True
+        )
+        .str.replace(   # periventricular 오타 수정
+            r'pervientricular'
+            , r'periventricular'
+            , regex=True
+        )
+        .str.replace(   # restricted 오타 수정
+            r'restrited'
+            , r'restricted'
+            , regex=True
+        )
+        .str.replace(   # disease 오타 수정
+            r'diesase'
+            , r'disease'
+            , regex=True
+        )
+        .str.replace(   # Hypoplastic 오타 수정
+            r'Hypoplasitc'
+            , r'hypoplastic'
+            , regex=True
+        )
+        .str.replace(   # abnormality 오타 수정
+            r'abnormalithy'
+            , r'abnormality'
+            , regex=True
+        )
+        .str.replace(   # ganglia 오타 수정
+            r'gangila|ganglila|gangla'
+            , r'ganglia'
+            , regex=True
+        )
+        .str.replace(   # hemicraniectomy 오타 수정
+            r'hemicraniectomhy'
+            , r'hemicraniectomy'
+            , regex=True
+        )
+        .str.replace(   # lenticulostriate 오타 수정
+            r'lentriculostriate'
+            , r'lenticulostriate'
+            , regex=True
+        )
+        .str.replace(   # infarction 오타 수정
+            r'infartion|infaction|infartcion(s)?|infarcion|inarction|einfarctions'
+            , r'infarction'
+            , regex=True
+        )
+        .str.replace(   # hippocampus 오타 수정
+            r'hippcampus'
+            , r'hippocampus'
+            , regex=True
+        )
+        .str.replace(   # transformation 오타 수정
+            r'transfromation'
+            , r'transformation'
+            , regex=True
+        )
+        .str.replace(   # multifocal 오타 수정.
+            r'[mM]utlifocal|[mM]utifocal|mulficoal'
+            , r'multi focal'
+            , regex=True
+        )
+        .str.replace(   # intracranial 오타 수정
+            r'intracrnial'
+            , r'intracranial'
+            , regex=True
+        )
+        .str.replace(   # appearance 오타 수정
+            r'appearence'
+            , r'appearance'
+            , regex=True
+        )
+        .str.replace(   # maxillary 오타 수정
+            r'maxillay'
+            , r'maxillary'
+            , regex=True
+        )
+        .str.replace(   # superficial 오타 수정
+            r'sueperficial'
+            , r'superficial'
+            , regex=True
+        )
+        .str.replace(   # microbleed 오타 수정
+            r'microbleead'
+            , r'microbleed'
+            , regex=True
+        )
+        .str.replace(   # susceptibility 오타 수정
+            r'Susceptibilty|susseptibility'
+            , r'susceptibility'
+            , regex=True
+        )
+        .str.replace(   # semiovale 오타 수정
+            r'semiovle|seliovale'
+            , r'semiovale'
+            , regex=True
+        )
+        .str.replace(   # pachymeningeal 오타 수정
+            r'pachyemningeal|pachymeiningeal'
+            , r'pachymeningeal'
+            , regex=True
+        )
+        .str.replace(   # dissecting 오타 수정
+            r'disseting'
+            , r'dissecting'
+            , regex=True
+        )
+        .str.replace(   # dizziness 오타 수정
+            r'\bdizzines\s'
+            , r'dizziness'
+            , regex=True
+        )
+        .str.replace(   # transverse 오타 수정
+            r'transverese|trasverse'
+            , r'transverse'
+            , regex=True
+        )
+        .str.replace(   # Microangiopathy 오타 수정
+            r'[mM]icroangilopathy|[mM]icronagiopathy|[mM]icroaniopathy'
+            , r'microangiopathy'
+            , regex=True
+        )
+        .str.replace(   # superior 오타 수정
+            r'\buperior'
+            , r'superior'
+            , regex=True
+        )
+        .str.replace(   # ethmoids 오타 수정
+            r'efhmoids'
+            , r'ethmoid'
+            , regex=True
+        )
+        .str.replace(   # enhance 오타 수정
+            r'e(m)?hancing|enhacing'
+            , r'enhancing'
+            , regex=True
+        )
+        .str.replace(   # stenosis 오타 수정
+            r'\bstenoses|\btenosis|stenoisis|stneosis|\bstenosisi\s|stenoseis'
+            , r'stenosis '
+            , regex=True
+        )
+        .str.replace(   # encephalomalacia 오타 수정
+            r'emce\[halomalacia|Encephalomacia'
+            , r'encephalomalacia'
+            , regex=True
+        )
+        .str.replace(   # reconstitution 오타 수정
+            r'reconstution'
+            , r'reconstitution'
+            , regex=True
+        )
+        .str.replace(   # meningioma 오타 수정
+            r'meninigioma'
+            , r'meningioma'
+            , regex=True
+        )
+        .str.replace(   # meningocele 오타 수정
+            r'meingocele'
+            , r'meningocele'
+            , regex=True
+        )
+        .str.replace(   # symptomatic 오타 수정
+            r'symtomatic'
+            , r'symptomatic'
+            , regex=True
+        )
+        .str.replace(   # parasagittal 오타 수정
+            r'parasagital'
+            , r'parasagittal'
+            , regex=True
+        )
+        .str.replace(   # schwannoma 오타 수정
+            r'schwanomma'
+            , r'schwannoma'
+            , regex=True
+        )
+        .str.replace(   # territory 오타 수정
+            r'terriotry'
+            , r'territory'
+            , regex=True
+        )
+        .str.replace(   # recanalization 오타 수정
+            r'reccanalization|recnalization|reconalization|recanaliation'
+            , r'recanalization'
+            , regex=True
+        )
+        .str.replace(   # metastasis 오타 수정
+            r'meatstasis|metatasis|\bmetastase\s|metastasis(s)?'
+            , r'metastasis'
+            , regex=True
+        )
+        .str.replace(   # cancer 오타 수정
+            r'\bcance\s'
+            , r'cancer'
+            , regex=True
+        )
+        .str.replace(   # along 오타 수정
+            r'\baloing'
+            , r'along'
+            , regex=True
+        )
         .str.replace(   # benign 오타 수정
             r"beni'gn"
             , r'benign'
             , regex=True
         )
+        .str.replace (  # hemorrhage 오타 수정
+            r'hemorrhag ein'
+            , r'hemorrhage'
+            , regex=True
+        )
+        .str.replace(   # impairment 오타 수정
+            r'impairement'
+            , r'impairment'
+            , regex=True
+        )
+        .str.replace(   # infundibulum 오타 수정
+            r'infuncibulum'
+            , r'infundibulum'
+            , regex=True
+        )
+        .str.replace(   # amount 오타 수정
+            r'abount|amont'
+            , r'amount'
+            , regex=True
+        )
+        .str.replace(   # complete 오타 수정
+            r'Complte'
+            , r'complete'
+            , regex=True
+        )
+        .str.replace(   # sequela 단수형으로 통일, 오타 수정
+            r'sequalae|sequelae'
+            , r'sequela'
+            , regex=True
+        )
         .str.replace(   # un_rupture_d 오타 수정 unruptred
-            r'unruptred'
+            r'unruptred|[uU]nruputured'
             , 'unruptured'
             , regex=True
         )
         .str.replace(   # definite 오타 수정
             r'deifnite'
             , r'definite'
+            , regex=True
+        )
+        .str.replace(   # condition 오타 수정
+            r'conditio(\s|$)'
+            , r'condition'
+            , regex=True
+        )
+        .str.replace(   # extent 오타 수정
+            r'exetent|exstent'
+            , r'extent'
+            , regex=True
+        )
+        .str.replace(   # change 오타 수정
+            r'chage'
+            , r'change'
+            , regex=True
+        )
+        .str.replace(   # canals 오타 수정
+            r'canasl'
+            , r'canals'
+            , regex=True
+        )
+        .str.replace(   # corpus 오타 수정
+            r'corcpus'
+            , r'corpus'
+            , regex=True
+        )
+        .str.replace(   # proximal 오타 수정
+            r'proxila|proxiaml'
+            , r'proximal'
             , regex=True
         )
         .str.replace(   # 특정 단어 뒤에 붙은 의미없는 '-' 기호 제거.
@@ -1100,6 +1558,11 @@ def medical_words_preprocessing(df : pd.DataFrame) :
         .str.replace(   # "1.6-m" 등의 cm 오타 정정.
             r'([0-9. \-]+)m\s'
             , r' \1cm'
+            , regex=True
+        )
+        .str.replace(   # 한글 단어에서 뒤에 조사가 붙는 경우 조사 제거.
+            r'([가-힣]+?)(에(서도?|도|게)?|처럼|으로|까지|부터|라도|의|는|을|은|도|과|와|함|됨|하여|인|후|한)(\s|$)'
+            , r'\1 '
             , regex=True
         )
     )
@@ -1375,7 +1838,7 @@ def demention_preprocessing(df : pd.DataFrame) :
                             , fr' Length-{Ltmp}mm '
                             , text)
                     # Width 정형화
-                    text = re.sub(fr'(?<=Length\-{Ltmp}mm ).+{Wvalue}\s*\-?(cm|\))'
+                    text = re.sub(fr'(?<=Length\-{Ltmp}mm ).+?{Wvalue}\s*\-?(cm|\))'
                                       , fr'Width-{Wtmp}mm '
                                       , text)
                 else:
@@ -1497,6 +1960,20 @@ def demention_preprocessing(df : pd.DataFrame) :
         # 전처리된 text 저장(덮어쓰기)
         df.at[idx, 'context'] = text
 
+    df.loc[:, 'context'] = (    # 그 외의 불필요한 구분자 역할의 특수문자 제거
+        df['context']
+        .str.replace(  # 구분자 역할의 특수문자 제거
+            r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
+            r'[-=]+>|'
+            r'\(<-+|(?<=n) <- (?=s)|'
+            r'\*\.\s*\*\s*|'
+            r'\*+\d+[, ]\d*|'
+            r'\d'
+            , ' '
+            , regex=True
+        )
+    )
+
 
 
 ## 날짜, 시간, 영상 인덱스 번호 등, 구분 주제(Note, DDX, e.g. 등) 문자열 전처리 함수.
@@ -1518,11 +1995,12 @@ def unnecessary_preprocessing(df : pd.DataFrame):
             r'on (\d+\/\d+\/\d{4}|\d{1,2}\/\d{1,2})\)?\.?|'         # on 5/8/2024, on 5/16
             r'on \d{4}[\-.]\d{1,2}[\-.]\d{1,2}[).,]*|'              # on 2021.5.28,  on 2022-01-05).
             r'in \d{4}(\)\.)|'                                      # in 2024).
-            r'\d+년\s*\d{1,2}월\s*\d{1,2}일'                           # 2020년 6월 10일
-            r'밤 \d+시경|'                                             # 밤 11시경
-            r'[0-9 \-]+[0-9]일|'                                     # 6 - 9일
+            r'\d+년\s*\d{1,2}월\s*\d{1,2}일'                         # 2020년 6월 10일
+            r'밤 \d+시경|'                                           # 밤 11시경
+            r'[0-9 \-]+[0-9]일|'                                    # 6 - 9일
             r'for[ 0-9]+days?|'                                     # for 2 days
-            r'in \d{4}[ .]+\d{1,2}[. ]+\d{1,2}[., ]+'               # in 2017.9.13,
+            r'in \d{4}[ .]+\d{1,2}[. ]+\d{1,2}[., ]+|'              # in 2017.9.13,
+            r'\s20\d{2}\)\.'                                        # 2021).
             , ' '
             , regex=True
         )
@@ -1555,6 +2033,11 @@ def unnecessary_preprocessing(df : pd.DataFrame):
             , r' month_\1_af '                  # after 6-12 months
             , regex=True
         )
+        .str.replace(   # '3~6개월 후' 등의 한글 범위로 작성된 문자열 전처리.
+            r'\s*\d+[-~](\d+)\s*개월\s*후'
+            , r' month_\1_af '
+            , regex=True
+        )
         .str.replace(   # 'after N-N weeks' 등의 범위로 작성된 문자열 전처리.
             r'after\s*\d+[-~](\d+)\s*weeks?'
             , r' week_\1_af '                   # after 4-8 weeks
@@ -1567,20 +2050,20 @@ def unnecessary_preprocessing(df : pd.DataFrame):
                 f' month_{m.group(1)}_af ' if m.group(2) in ['month', 'months'] else ""
             , regex=True
         )
-        .str.replace(
+        .str.replace(   # 문장, 문단 구분하는 특수한 경우이며 이들을 모두 [SEP] 토큰화 한다.
             r'(\*{2}[ 1-9\-,.]+)|'                  # ** 1-2, **1,2
             r'(\bI+\.\s)|'                          # I., II., III.,
             r'(\*?\s*[nN]ote\s*[,:.])|'             # * Note:
-            r'((?<=[a-zA-Z가-힣\)])\.(\s|$|\n|\t))|' # 문장의 마지막 '.'
+            r'((?<=[a-zA-Z가-힣\)])\.(\s{3,5}|$|\n|\t))|' # 문장의 마지막 '.'
             r'((\b|^)(\d|10)\s*[.,](\s|(?=MRA|Both|Right|Diff|Mic))|\d\s*(?=No -significant))|'  # 1., 2., 3.,
             r'([(\[]\d[)\]]\:?)|'                   # (1), (2), [1], [2] ...
-            r'((?<=\w)[`\'\’]([Ss]|\s)*)|'          # Parkinson's
             r'(\s(\-+|\(|\))\s)|'                   # 구분 문자 역할의 ' - ' 등.
             r'(((\s|^|\*+)\d\))+[.,]?\s)|'          # 순서 번호 역할의 1), 2).
             r'(e\.g\.?)|'                           # e.g = for example
             r'(Ex\))|'                              # Ex)
-            r'(박정식\.)'                            # 무의미한 사람 이름 포함.
-            , r' '
+            r'(박정식\.)|'                           # 무의미한 사람 이름 포함.
+            r'lobbe|op\.\s*site\.'                  # 의미 없는 단어.
+            , r' __SEP__ '
             , regex=True
         )
         .str.replace(   # left 약어 처리.
@@ -1627,16 +2110,6 @@ def unnecessary_preprocessing(df : pd.DataFrame):
             , ' '
             , regex=True
         )
-        .str.replace(  # 구분자 역할의 특수문자 제거
-            r'\((?=[a-zA-Z])|(?<=[a-zA-Z])\)|'
-            r'[-=]+>|'
-            r'\(<-+|(?<=n) <- (?=s)|'
-            r'\*\.\s*\*\s*|'
-            r'\*+\d+[, ]\d*|'
-            r'\d'
-            , ' '
-            , regex=True
-        )
         .str.replace(   # '분', '환자', 'pt'를 'patient'로 통일.
             r'환자\s*(분)?|\b(분|pt)\b'
             , r' patient '
@@ -1655,7 +2128,7 @@ def pos_neg_preprocessing(df : pd.DataFrame):
     df.loc[:, 'context'] = (
         df['context']
         .str.replace(
-            r'\(\+\)|\w\s\+'
+            r'\(\+\)|[^AC]\w\s\+'
             , 'positive'
             , regex=True
         )
@@ -1681,6 +2154,11 @@ def pos_neg_preprocessing(df : pd.DataFrame):
 def special_token_preprocessing(df : pd.DataFrame):
     # 문장 첫 시작은 [CLS] token
     df['context'] = '[CLS] ' + df['context'] + ' [SEP]'
+
+    # Bug : 2), 3) 등 '.\n' 다음에 [SEP] 토큰이 안 생기고 전처리도 되지 않는 문제 확인.
+    # df.loc[:, 'context'] = (
+    #     df['context'].str.replace(r'(((\s|^|\*+)\d\))+[.,]?\s)', r' ', regex=True)
+    # )
 
     df.loc[:, 'context'] = (
         df['context']
@@ -1716,7 +2194,6 @@ def word_tokenizing(df : pd.DataFrame):
                               '감소', '증가', '관찰'])  # [UNK]로 분류되는 단어 또는 의학 용어 추가.
 
 
-
     # 먼저, 한국어 호환되는 토크나이저의 토큰화 결과를 담는다.
     for idx, text in df['context'].items():
         kts = kor_tokenizer.tokenize(text)
@@ -1743,6 +2220,11 @@ def word_tokenizing(df : pd.DataFrame):
         # vocab에 추가한다.
         tokenizer_bert.add_tokens(tokens_to_add)
 
+    # 소견문 내에 '영어 + 한글 조사' 형태의 토큰은 '[UNK]'가 되므로 한글 조사 부분 삭제.
+    df.loc[:, 'context'] = (
+        df['context']
+        .str.replace(r'([a-zA-Z]+)[가-힣]+', r'\1', regex=True)
+    )
 
     # 2차, tokenizer_bert로 토큰화한 결과 중 '_'를 포함하는 조합의 경우 1개의 단어로 통합할 수 있도록 사전 추가
     for idx, text in df['context'].items():
@@ -1831,15 +2313,17 @@ def training(train_dataloader : DataLoader):
     device = Checking_cuda()
 
     # BERT 학습 모델.
-    # 먼저 구성 객체 설정.
+    #먼저 구성 객체 설정.
     config = BertConfig.from_pretrained(
         'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+        #'microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext',
         num_labels=2
     )
 
-    # 분류용 헤드를 수동으로 생성.
+    # 분류용 헤드를 수동으로 생성(기존 모델은 '분류' 목적이 아니었으므로 label 옵션을 추가하여 분류용으로 만듦).
     model = BertForSequenceClassification.from_pretrained(
         'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+        #'microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext',
         config=config
     )
 
@@ -1853,10 +2337,10 @@ def training(train_dataloader : DataLoader):
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8, weight_decay=0.01)
 
     # 모델 에폭수
-    epochs = 4
+    epochs = 5
     # 총 훈련 스탭 = 배치 반복 횟수 * 에폭수
     total_steps = len(train_dataloader) * epochs
     # 스케줄러 생성
