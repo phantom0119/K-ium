@@ -51,6 +51,9 @@ print('크기 데이터 전처리 작업 완료')
 prp.pos_neg_preprocessing(tdf)
 print('긍정/부정 값 전처리 작업 완료')
 
+prp.unnecessary_preprocessing(tdf)
+print('불필요 용어 처리 완료')
+
 prp.special_token_preprocessing(tdf)
 print('special token 추가 작업 완료')
 
@@ -66,24 +69,24 @@ prp.embedding(tdf)
 print('단어 임베딩 및 attention mask 생성 완료')
 
 
-# idx_list = tdf.index.tolist()
-# for idx in idx_list:
-#     print(raw_df.loc[idx, 'Findings'])
-#     print(raw_df.loc[idx, 'Conclusion'])
-#     print('-------------------------------------------------------------------------------')
-#     print(tdf.context.loc[idx])
-#     print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-#     print(tdf.tokens.loc[idx])
-#     print(tdf.input_ids.loc[idx])
-#     print(tdf.padd_ids.loc[idx])
-#     print('###############################################################################')
-#     print()
+idx_list = tdf.index.tolist()
+for idx in idx_list:
+    print(raw_df.loc[idx, 'Findings'])
+    print(raw_df.loc[idx, 'Conclusion'])
+    print('-------------------------------------------------------------------------------')
+    print(tdf.context.loc[idx])
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+    print(tdf.tokens.loc[idx])
+    print(tdf.input_ids.loc[idx])
+    print(tdf.padd_ids.loc[idx])
+    print('###############################################################################')
+    print()
 
 print(max_token_size)
 print(tdf['padd_ids'].apply(len).max())
 
 
-batch_size = 16  # 또는 32 등 원하는 배치 크기
+batch_size = 32  # 또는 32 등 원하는 배치 크기
 
 # 레이블, input 데이터, 마스킹 값
 encoder = LabelEncoder()

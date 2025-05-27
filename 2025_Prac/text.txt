@@ -1,0 +1,101 @@
+import re
+
+text = "Increased size of homogeneous enhancing mass at left basal ganglia Length 23mm Width 28mm and another 6.5 mm region."
+
+# Step 1: Length/Width/Height 패턴을 마스킹하며 보존 (토큰 형태로)
+pattern_protect = re.compile(r'\b(Length|Width|Height)\s+(\d+(?:\.\d+)?)\s*mm\b')
+
+# 마스킹하면서 저장
+protected_matches = []
+def protect_repl(match):
+    token = f"__PROTECT{len(protected_matches)}__"
+    protected_matches.append((token, match.group(0)))  # 원문 저장
+    return token
+
+masked = pattern_protect.sub(protect_repl, text)
+
+# Step 2: 이제 나머지 "단독 mm 수치"만 추출
+unlabeled_matches = re.findall(r'\b\d+(?:\.\d+)?\s*mm\b', masked)
+
+# Step 3: 복원
+for token, original in protected_matches:
+    masked = masked.replace(token, original)
+
+print("단독 수치 추출 결과:", unlabeled_matches)
+print("복원된 문장:", masked)
+
+
+\d{1,2}(cm|mm)\s*-+>
+
+ A-Com = Anterior Communicating Artery
+ jx. = junction
+ F/I = Further Investigation
+ (CE) = Contrast Enhancement
+ T2* = T2-star (T2-star weighted imaging)
+ Cerebral, Cerebrum = 대뇌
+ Cerebellum = 소뇌
+
+ 대뇌의 4개(Parietal, Temporal, Occipital, Frontal)의 엽(Lobe) 분류 용어에 대한 정형화.
+ DLBCL = large B-cell lymphoma
+ GKRS = Gamma Knife Radiosurgery
+
+
+
+한글 명칭	영어 명칭	설명
+전두엽	Frontal lobe	운동, 계획, 판단, 언어 생산 (Broca 영역 포함)
+두정엽	Parietal lobe	감각 정보 처리, 공간 지각
+측두엽	Temporal lobe	청각, 언어 이해 (Wernicke 영역), 기억
+후두엽	Occipital lobe	시각 처리
+중심이랑	Central sulcus	전두엽과 두정엽의 경계
+롤랑도 이랑	Precentral gyrus	주운동피질 위치
+중심후 이랑	Postcentral gyrus	주감각피질 위치
+해마	Hippocampus	기억 형성에 핵심적인 구조
+편도체	Amygdala	감정 처리 (특히 공포)
+대상회	Cingulate gyrus	감정, 통증 인지, 자율신경 조절
+섬엽	Insular cortex (Insula)	감각 통합, 내장 감각, 자각
+전측 대상피질	Anterior cingulate cortex	의사결정, 감정 조절
+측두하회	Inferior temporal gyrus	고차 시각 처리 (물체 인식 등)
+전두극	Frontal pole	고차 인지 기능, 계획 수립
+측두극	Temporal pole	감정 및 사회적 신호 통합
+두정부엽	Parietal convexity/lobe	두정엽의 바깥면, 보통 MRA/CT/MRI에서 표현
+뇌량	Corpus callosum	좌우 대뇌반구 연결하는 백질 구조
+기저핵	Basal ganglia	운동 조절, 습관 행동
+내포	Internal capsule	대뇌피질과 뇌간 사이 신경 섬유 다발
+측뇌실	Lateral ventricle	뇌척수액이 흐르는 공간 (좌우 대칭 구조)
+
+
+
+
+
+# mask_matches = []
+        # mask_pattern = re.compile(r'\b(?:Length|Width|Height)\-\d{1,2}(?:\.\d{1,2})?mm\b')
+        # masked = mask_pattern.sub(Mask_Repl, Ftext)
+        #
+        # # 마스킹된 텍스트에서 1차원 크기 데이터 추출.
+        # matches = re.findall(r'(\d{1,2}(?:[.,]\d{1,2})?)\s*(mm|cm)[가-힣]*\b', masked)
+        # if matches:
+        #     # 중복되는 Group에 의해 2번 정형화되지 않도록 세트화.
+        #     matches = sorted(list(set(matches)), key=lambda x: float(x[0]), reverse=True)
+        #     print(matches)
+        #     for grplist in matches:
+        #         if grplist[-1] == 'cm':
+        #             Ltmp = str(int(float(grplist[0]) * 10))
+        #             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+        #             masked = re.sub(fr'([^1-9]|^|\(){Lvalue}\s*cm', fr' Length-{Ltmp}mm ', masked)
+        #         elif grplist[-1] == 'mm' and '.' in grplist[0]:
+        #             # Ltmp = re.sub(r'(\d{1,2}).+', r'\1', grplist[0])
+        #             Lvalue = re.sub(r'\.', r'\\.', grplist[0])
+        #             Ltmp = str(round(float(grplist[0])))
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-))({Lvalue}\s*mm)', fr' Length-{Ltmp}mm ', masked)
+        #         elif grplist[-1] == 'mm' and ',' in grplist[0]:
+        #             Ltmp = str(round(float(grplist[0].replace(',', '.'))))
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-))({grplist[0]}\s*mm)', fr' Length-{Ltmp}mm ', masked)
+        #         else:
+        #             masked = re.sub(fr'((?<!\d)|^|\(|(?<!Length\-)){grplist[0]}\s*mm[가-힣]*', fr' Length-{grplist[0]}mm', masked)
+        #
+        #         # 마스킹된 텍스트를 복원 후, 최종 결과를 Ctext에 저장.
+        #         for token, text in mask_matches:
+        #             masked = masked.replace(token, text)
+        #
+        #         Ftext = masked
+        #         masked = mask_pattern.sub(Mask_Repl, Ftext)

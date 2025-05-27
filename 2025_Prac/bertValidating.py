@@ -8,13 +8,11 @@ import pandas as pd
 import torch
 from sklearn.preprocessing import LabelEncoder
 from transformers import BertForSequenceClassification
-from transformers import AutoTokenizer
 import Preprocessing as prp
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 
 
-model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_5")
-tokenizer_bert = AutoTokenizer.from_pretrained("../../saved_bert_model_5")
+model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_4")
 
 kiumSet = pd.read_csv(r'.\ValidationSet.csv')
 df = pd.DataFrame(kiumSet)
@@ -46,11 +44,14 @@ print('크기 데이터 전처리 작업 완료')
 prp.pos_neg_preprocessing(vdf)
 print('긍정/부정 값 전처리 작업 완료')
 
+prp.unnecessary_preprocessing(vdf)
+print('불필요 용어 처리 완료')
+
 prp.special_token_preprocessing(vdf)
 print('special token 추가 작업 완료')
 
 # 'tokens' Column 생성되는 위치.
-vdf['tokens'] = vdf['context'].apply(lambda x: tokenizer_bert.tokenize(x))
+prp.word_tokenizing(vdf)
 print('단어 토큰화 작업 완료')
 
 max_token_size = prp.stopword_removal(vdf)
