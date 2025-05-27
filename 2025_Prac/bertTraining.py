@@ -13,8 +13,8 @@ kium = pd.read_csv(r'.\TrainCopySet.csv')
 raw_df = pd.DataFrame(kium)
 
 # 50개씩 검사
-#tdf = raw_df.iloc[150:170].copy()
-tdf = raw_df.copy()
+tdf = raw_df.iloc[150:170].copy()
+#tdf = raw_df.copy()
 
 # patt = r'[a-z][가-힣]|patient'
 # tdf = raw_df.loc[
@@ -86,7 +86,7 @@ print(max_token_size)
 print(tdf['padd_ids'].apply(len).max())
 
 
-batch_size = 32  # 또는 32 등 원하는 배치 크기
+batch_size = 16  # 또는 32 등 원하는 배치 크기
 
 # 레이블, input 데이터, 마스킹 값
 encoder = LabelEncoder()

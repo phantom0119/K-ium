@@ -15,7 +15,7 @@ from transformers import BertTokenizer
 import nltk                                 # Word Tokenization
 from nltk.tokenize import sent_tokenize     # 문장 자연어 토큰화
 from torch.utils.data import DataLoader
-from transformers import BertForSequenceClassification, BertConfig
+from transformers import BertForSequenceClassification, BertConfig, AutoTokenizer
 from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import roc_auc_score, classification_report
@@ -26,7 +26,7 @@ nltk.download('stopwords')  # 불용어 사전
 #nltk.download('punkt_tab')
 
 # 학습 모델 저장/불러오기 경로 설정
-model_save_path = '../../saved_bert_model_4'
+model_save_path = '../../saved_bert_model_6'
 
 
 ## 토큰화 사전에 없는 용어(UNK) 추가
@@ -34,10 +34,9 @@ model_save_path = '../../saved_bert_model_4'
 #  bert-base-multilingual-cased : 다국어 지원 토크나이저
 #  microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract : 의학 소견/논문 바탕의 pretrained model
 vocab = ['찢어지는', '촤측', '없', '폐쇄', '상', '은', '과거', '않다', '없다', '보이다', '있다',
-         'unremarkable', 'gammaknife', 'GKRS', 'monoparesis', 'fenestration', 'rupture', 'infundibulum',
-         'microangiopathy', 'dysarthria', 'cistern', 'corona', 'radiata']
-
-tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
+         'unremarkable', 'gammaknife', 'GKRS', 'corona']
+tokenizer_bert = AutoTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract')
+#tokenizer_bert = BertTokenizer.from_pretrained('microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext')
 tokenizer_bert.add_tokens(vocab)
 #tokenizer_bert = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 
@@ -114,8 +113,8 @@ def sent_tokenizing(df : pd.DataFrame):
     # ex) e.g, Rt. 등
     df.loc[:, 'context'] = (
         df['context']
-        .str.replace(r'[rR][tT](\.|\s|$)', r' right ', regex=True)
-        .str.replace(r'[lL][tT](\.|\s|$)', r' left ', regex=True)
+        .str.replace(r'\b[rR][tT](\.|\s|$)', r' right ', regex=True)
+        .str.replace(r'\b[lL][tT](\.|\s|$)', r' left ', regex=True)
         .str.replace(r'[eE]\.[gG]', r'example', regex=True)
     )
 
@@ -1834,12 +1833,14 @@ def training(train_dataloader : DataLoader):
     # 먼저 구성 객체 설정.
     config = BertConfig.from_pretrained(
         'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
-        num_labels=2
+        #'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext',
+    num_labels=2
     )
 
     # 분류용 헤드를 수동으로 생성.
     model = BertForSequenceClassification.from_pretrained(
         'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract',
+        #'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext',
         config=config
     )
 
@@ -1853,7 +1854,7 @@ def training(train_dataloader : DataLoader):
     # 토크나이저 단어 사전에 사용자 추가된 것이 있으므로 개수 반영.
     model.resize_token_embeddings(len(tokenizer_bert))
     # 옵티마이저
-    optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=1e-5, eps=1e-8)
 
     # 모델 에폭수
     epochs = 4

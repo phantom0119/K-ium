@@ -12,7 +12,7 @@ import Preprocessing as prp
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 
 
-model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_4")
+model = BertForSequenceClassification.from_pretrained("../../saved_bert_model_3")
 
 kiumSet = pd.read_csv(r'.\ValidationSet.csv')
 df = pd.DataFrame(kiumSet)
@@ -62,7 +62,7 @@ prp.embedding(vdf)
 print('단어 임베딩 및 attention mask 생성 완료')
 
 
-batch_size = 32  # 또는 32 등 원하는 배치 크기
+batch_size = 16  # 또는 32 등 원하는 배치 크기
 
 # 레이블, input 데이터, 마스킹 값
 encoder = LabelEncoder()
@@ -77,11 +77,9 @@ test_dataset = TensorDataset(test_tensor, test_mask, test_labels)
 test_sampler = SequentialSampler(test_dataset)
 test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=batch_size)
 
-
 prp.validating(model, test_dataloader)
 
-
-'''
+'''  4번 모델 결과
                 precision    recall  f1-score   support
 
            0       1.00      1.00      1.00      2423
@@ -93,3 +91,19 @@ weighted avg       0.99      0.99      0.99      2653
 
 정확도(Accuracy): 0.97423
 '''
+
+
+idx_list = vdf.index.tolist()
+for idx in idx_list:
+    print(df.loc[idx, 'Findings'])
+    print(df.loc[idx, 'Conclusion'])
+    print('-------------------------------------------------------------------------------')
+    print(vdf.context.loc[idx])
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+    print(vdf.tokens.loc[idx])
+    print(vdf.input_ids.loc[idx])
+    print(vdf.padd_ids.loc[idx])
+    print('###############################################################################')
+    print()
+
+
